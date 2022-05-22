@@ -27,6 +27,7 @@ extern void i370_asm_start (void);
 extern void i370_asm_end (void);
 extern void i370_asm_globalize_label (FILE *f, const char *name);
 extern void i370_asm_label_ref (FILE *f, const char *name);
+extern void i370_cpu_cpp_builtins (cpp_reader *pfile);
 
 #ifdef RTX_CODE
 extern int i370_branch_dest (rtx insn);

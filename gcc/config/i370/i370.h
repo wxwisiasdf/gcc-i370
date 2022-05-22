@@ -234,10 +234,45 @@ extern void mvs_mark_alias(const char *);
 
 /* Define special register allocation order desired. */
 
-#define REG_ALLOC_ORDER                                                  \
-  {                                                                      \
-    2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 10, 15, 14, 12, 16, 17, 18, 19, 11, 13 \
-  }
+#define FIXED_REGISTERS				\
+{ 0, 0, 0, 0,					\
+  0, 0, 0, 0,					\
+  0, 0, 0, 0,					\
+  0, 1, 1, 1,					\
+  0, 0, 0, 0,					\
+  0, 0, 0, 0,					\
+  0, 0, 0, 0,					\
+  0, 0, 0, 0,					\
+  1, 1, 1, 1,					\
+  1, 1,						\
+  0, 0, 0, 0,					\
+  0, 0, 0, 0,					\
+  0, 0, 0, 0,					\
+  0, 0, 0, 0 }
+
+#define CALL_REALLY_USED_REGISTERS		\
+{ 1, 1, 1, 1,	/* r0 - r15 */			\
+  1, 1, 0, 0,					\
+  0, 0, 0, 0,					\
+  0, 0, 0, 0,					\
+  1, 1, 1, 1,	/* f0 (16) - f15 (31) */	\
+  1, 1, 1, 1,					\
+  1, 1, 1, 1,					\
+  1, 1, 1, 1,					\
+  1, 1, 1, 1,	/* arg, cc, fp, ret addr */	\
+  0, 0,		/* a0 (36), a1 (37) */		\
+  1, 1, 1, 1,	/* v16 (38) - v23 (45) */	\
+  1, 1, 1, 1,					\
+  1, 1, 1, 1,	/* v24 (46) - v31 (53) */	\
+  1, 1, 1, 1 }
+
+/* Preferred register allocation order.  */
+#define REG_ALLOC_ORDER							\
+  {  1, 2, 3, 4, 5, 0, 12, 11, 10, 9, 8, 7, 6, 14, 13,			\
+     16, 17, 18, 19, 20, 21, 22, 23,					\
+     24, 25, 26, 27, 28, 29, 30, 31,					\
+     38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53,	\
+     15, 32, 33, 34, 35, 36, 37 }
 
 /* Standard register usage.  */
 
@@ -249,128 +284,13 @@ extern void mvs_mark_alias(const char *);
    For the 370, we give the data registers numbers 0-15,
    and the floating point registers numbers 16-19.  */
 
-#define FIRST_PSEUDO_REGISTER 20
+#define FIRST_PSEUDO_REGISTER 54
 
 /* Define base and page registers.  */
 
 #define BASE_REGISTER 3
 #define PAGE_REGISTER 4
 #define PIC_BASE_REGISTER 12
-
-#ifdef TARGET_HLASM
-/* 1 for registers that have pervasive standard uses and are not available
-   for the register allocator.  These are registers that must have fixed,
-   valid values stored in them for the entire length of the subroutine call,
-   and must not in any way be moved around, jiggered with, etc. That is,
-   they must never be clobbered, and, if clobbered, the register allocator
-   will never restore them back.
-
-   For the LE/370 mode, we use five registers in this special way:
-   -- R3 which is used as the base register
-   -- R4 the page origin table pointer used to load R3,
-   -- R11 the arg pointer.
-   -- R12 the TCA pointer
-   -- R13 the stack (DSA) pointer
-
-   For TARGET_DIGNUS or TARGET_PDPMAC mode:
-   -- R10 the page origin table pointer used to load R3,
-   -- R11 the arg pointer.
-   -- R12 the base register.
-   -- R13 the stack pointer
-
-   A fifth register is also exceptional: R14 is used in many branch
-   instructions to hold the target of the branch.  Technically, this
-   does not qualify R14 as a register with a long-term meaning; it should
-   be enough, theoretically, to note that these instructions clobber
-   R14, and let the compiler deal with that.  In practice, however,
-   the "clobber" directive acts as a barrier to optimization, and the
-   optimizer appears to be unable to perform optimizations around branches.
-   Thus, a much better strategy appears to give R14 a pervasive use;
-   this eliminates it from the register pool witout hurting optimization.
-
-   There are other registers which have special meanings, but its OK
-   for them to get clobbered, since other allocator config below will
-   make sure that they always have the right value.  These are for
-   example:
-   -- R1 the returned structure pointer.
-   -- R10 the static chain reg.
-   -- R15 holds the value a subroutine returns.
-
-   Notice that it is *almost* safe to mark R11 as available to the allocator.
-   By marking it as a call_used_register, in most cases, the compiler
-   can handle it being clobbered.  However, there are a few rare
-   circumstances where the register allocator will allocate r11 and
-   also try to use it as the arg pointer ... thus it must be marked fixed.
-   I think this is a bug, but I can't track it down...
- */
-
-#if defined(TARGET_DIGNUS) || defined(TARGET_PDPMAC)
-#undef PAGE_REGISTER
-#undef BASE_REGISTER
-#define PAGE_REGISTER 10
-#define BASE_REGISTER 12
-
-#ifdef TARGET_DIGNUS
-#define FIXED_REGISTERS                                        \
-  {                                                            \
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0 \
-  }
-/*0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19*/
-#endif
-
-#ifdef TARGET_PDPMAC
-/* made register 1 fixed because it is used
-   for parameter passing, otherwise we DO
-   have a problem! */
-/* also made register 0 fixed, because I am using that
-   for the struct, instead of 1.  Why would anyone
-   choose 1 for the struct when it is being used
-   already for the parameters? */
-#define FIXED_REGISTERS                                        \
-  {                                                            \
-    1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0 \
-  }
-/*0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19*/
-#endif
-
-/* 1 for registers not available across function calls.  These must include
-   the FIXED_REGISTERS and also any registers that can be used without being
-   saved.
-   The latter must include the registers where values are returned
-   and the register where structure-value addresses are passed.
-   NOTE: all floating registers are undefined across calls.
-*/
-
-#define CALL_USED_REGISTERS                                    \
-  {                                                            \
-    1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 \
-  }
-/*0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19*/
-#endif
-
-#ifdef TARGET_LE
-#define FIXED_REGISTERS                                        \
-  {                                                            \
-    0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0 \
-  }
-/*0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19*/
-
-/* 1 for registers not available across function calls.  These must include
-   the FIXED_REGISTERS and also any registers that can be used without being
-   saved.
-   The latter must include the registers where values are returned
-   and the register where structure-value addresses are passed.
-   NOTE: all floating registers are undefined across calls.
-*/
-
-#define CALL_USED_REGISTERS                                    \
-  {                                                            \
-    1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1 \
-  }
-/*0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19*/
-#endif /* TARGET_LE */
-
-#endif /* TARGET_HLASM */
 
 /* Return number of consecutive hard regs needed starting at reg REGNO
    to hold something of mode MODE.
@@ -429,48 +349,20 @@ extern void mvs_mark_alias(const char *);
 #ifdef TARGET_HLASM
 
 /* Register to use for pushing function arguments.  */
-
 #define STACK_POINTER_REGNUM 13
 
 /* Base register for access to local variables of the function.  */
-
 #define FRAME_POINTER_REGNUM 13
+#define HARD_FRAME_POINTER_REGNUM FRAME_POINTER_REGNUM
 
 /* Base register for access to arguments of the function.  */
-
 #define ARG_POINTER_REGNUM 11
+
+/* Register for return address */
+#define RETURN_ADDRESS_POINTER_REGNUM 14
 
 #endif /* TARGET_HLASM */
 
-/* ================= */
-#ifdef TARGET_LINUX
-
-/* Register to use for pushing function arguments.  */
-
-#define STACK_POINTER_REGNUM 11
-
-/* Base register for access to local variables of the function.
-   A separate stack and frame pointer is required for any function
-   that calls alloca() or does other pushing onto the stack. */
-
-#define FRAME_POINTER_REGNUM 13
-
-/* Value should be nonzero if functions must have frame pointers.
-   Zero means the frame pointer need not be set up (and parms may be
-   accessed via the stack pointer) in functions that seem suitable.
-   This is computed in `reload', in reload1.c.  */
-
-#define FRAME_POINTER_REQUIRED 1
-
-/* Function epilogue uses the frame pointer to restore the context */
-#define EXIT_IGNORE_STACK 1
-
-/* Base register for access to arguments of the function.
-   We will use the frame pointer as the arg pointer. */
-
-#define ARG_POINTER_REGNUM 13
-
-#endif /* TARGET_LINUX */
 /* ================= */
 /* ------------------------------------------------------------------- */
 
@@ -790,12 +682,60 @@ enum reg_class
 
 #define INIT_CUMULATIVE_ARGS(CUM, FNTYPE, LIBNAME, INDIRECT, ...) ((CUM) = 0)
 
-#define ELIMINABLE_REGS \
-  {                     \
-    3, 10               \
-  }
+#define ELIMINABLE_REGS						\
+{{ FRAME_POINTER_REGNUM, STACK_POINTER_REGNUM },		\
+ { FRAME_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM },		\
+ { ARG_POINTER_REGNUM, STACK_POINTER_REGNUM },			\
+ { ARG_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM },		\
+ { RETURN_ADDRESS_POINTER_REGNUM, STACK_POINTER_REGNUM },	\
+ { RETURN_ADDRESS_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM },	\
+ { BASE_REGNUM, BASE_REGNUM }}
 
-#define TARGET_CPU_CPP_BUILTINS()
+#define TARGET_CPU_CPP_BUILTINS() i370_cpu_cpp_builtins (pfile)
+
+/* The basic stack layout looks like this: the stack pointer points
+   to the register save area for called functions.  Above that area
+   is the location to place outgoing arguments.  Above those follow
+   dynamic allocations (alloca), and finally the local variables.  */
+
+/* Offset from stack-pointer to first location of outgoing args.  */
+#define STACK_POINTER_OFFSET 88
+
+/* Offset from the stack pointer register to an item dynamically
+   allocated on the stack, e.g., by `alloca'.  */
+#define STACK_DYNAMIC_OFFSET(FUNDECL) \
+  (STACK_POINTER_OFFSET + crtl->outgoing_args_size)
+
+/* Offset of first parameter from the argument pointer register value.
+   We have a fake argument pointer register that points directly to
+   the argument area.  */
+#define FIRST_PARM_OFFSET(FNDECL) 0
+
+/* Defining this macro makes __builtin_frame_address(0) and
+   __builtin_return_address(0) work with -fomit-frame-pointer.  */
+#define INITIAL_FRAME_ADDRESS_RTX                                             \
+  (plus_constant (Pmode, arg_pointer_rtx, -STACK_POINTER_OFFSET))
+
+/* The return address of the current frame is retrieved
+   from the initial value of register RETURN_REGNUM.
+   For frames farther back, we use the stack slot where
+   the corresponding RETURN_REGNUM register was saved.  */
+#define DYNAMIC_CHAIN_ADDRESS(FRAME)                                          \
+  (1 ? plus_constant (Pmode, (FRAME), STACK_POINTER_OFFSET - UNITS_PER_LONG) : (FRAME))
+
+/* For -mpacked-stack this adds 160 - 8 (96 - 4) to the output of
+   builtin_frame_address.  Otherwise arg pointer -
+   STACK_POINTER_OFFSET would be returned for
+   __builtin_frame_address(0) what might result in an address pointing
+   somewhere into the middle of the local variables since the packed
+   stack layout generally does not need all the bytes in the register
+   save area.  */
+#define FRAME_ADDR_RTX(FRAME)			\
+  DYNAMIC_CHAIN_ADDRESS ((FRAME))
+
+/* Describe how we implement __builtin_eh_return.  */
+#define EH_RETURN_DATA_REGNO(N) ((N) < 4 ? (N) + 6 : INVALID_REGNUM)
+#define EH_RETURN_HANDLER_RTX gen_rtx_MEM (Pmode, return_address_pointer_rtx)
 
 /* Update the data in CUM to advance over an argument of mode MODE and
    data type TYPE.  (TYPE is null for libcalls where that information
@@ -1352,58 +1292,28 @@ enum reg_class
 /* How to refer to registers in assembler output.  This sequence is
    indexed by compiler's hard-register-number (see above).  */
 
-#define REGISTER_NAMES                                \
-  {                                                   \
-    "0", "1", "2", "3", "4", "5", "6", "7",           \
-        "8", "9", "10", "11", "12", "13", "14", "15", \
-        "0", "2", "4", "6"                            \
+#define REGISTER_NAMES							\
+  { "R0",  "R1",  "R2",  "R3",  "R4",  "R5",  "R6",  "R7",	\
+    "R8",  "R9",  "R10", "R11", "R12", "R13", "R14", "R15",	\
+    "F0",  "F2",  "F4",  "F6",  "F1",  "F3",  "F5",  "F7",	\
+    "F8",  "F10", "F12", "F14", "F9",  "F11", "F13", "F15",	\
+    "AP",  "CC",  "FP",  "RP",  "A0",  "A1",			\
+    "V16", "V18", "V20", "V22", "V17", "V19", "V21", "V23",	\
+    "V24", "V26", "V28", "V30", "V25", "V27", "V29", "V31"	\
   }
+
+#define ADDITIONAL_REGISTER_NAMES					\
+  { { "V0", 16 }, { "V2",  17 }, { "V4",  18 }, { "V6",  19 },		\
+    { "V1", 20 }, { "V3",  21 }, { "V5",  22 }, { "V7",  23 },          \
+    { "V8", 24 }, { "V10", 25 }, { "V12", 26 }, { "V14", 27 },          \
+    { "V9", 28 }, { "V11", 29 }, { "V13", 30 }, { "V15", 31 } };
 
 #ifdef TARGET_ALIASES
-
-#define ASM_FILE_START(FILE)                        \
-  {                                                 \
-    extern const char *main_input_filename;         \
-    extern char *asm_file_name;                     \
-    char temp[256];                                 \
-    const char *cbp, *cfp;                          \
-    char *bp;                                       \
-    if (asm_file_name)                              \
-    {                                               \
-      if (strncmp(asm_file_name, "/tmp", 4) == 0)   \
-        cfp = main_input_filename;                  \
-      else                                          \
-        cfp = asm_file_name;                        \
-    }                                               \
-    else                                            \
-      cfp = main_input_filename;                    \
-    if ((cbp = strrchr(cfp, '/')) == NULL)          \
-      cbp = cfp;                                    \
-    else                                            \
-      cbp++;                                        \
-    while (*cbp == '_')                             \
-      cbp++;                                        \
-    strcpy(temp, cbp);                              \
-    if ((bp = strchr(temp, '.')) != NULL)           \
-      *bp = '\0';                                   \
-    for (bp = temp; *bp; bp++)                      \
-      *bp = ISLOWER(*bp) ? TOUPPER(*bp) : *bp;      \
-    mvs_module = (char *)xmalloc(strlen(temp) + 2); \
-    strcpy(mvs_module, temp);                       \
-    for (bp = temp; *bp; bp++)                      \
-      *bp = ISUPPER(*bp) ? TOLOWER(*bp) : *bp;      \
-    fprintf(FILE, "@DATA\tALIAS\tC'@%s'\n", temp);  \
-    fputs("@DATA\tAMODE\tANY\n", FILE);             \
-    fputs("@DATA\tRMODE\tANY\n", FILE);             \
-    fputs("@DATA\tCSECT\n", FILE);                  \
-  }
-
 #define TARGET_ASM_FILE_END(FILE) \
   {                               \
     mvs_dump_alias(FILE);         \
     fputs("\tEND\n", FILE);       \
   }
-
 #else
 
 #define TARGET_ASM_FILE_START i370_asm_start

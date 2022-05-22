@@ -38,6 +38,7 @@ Boston, MA 02111-1307, USA.  */
 #include "cfghooks.h"
 #include "cfgloop.h"
 #include "df.h"
+#include "cpplib.h"
 #include "memmodel.h"
 #include "tm_p.h"
 #include "stringpool.h"
@@ -289,10 +290,18 @@ void i370_asm_start(void)
     *bp = ISLOWER(*bp) ? TOUPPER(*bp) : *bp;
   mvs_module = (char *)xmalloc(strlen(temp) + 2);
   strcpy(mvs_module, temp);
+#ifdef TARGET_ALIASES
+  fprintf(f, "@DATA\tALIAS\tC'@%s'\n", temp);
+  fputs("@DATA\tAMODE\tANY\n", f);
+  fputs("@DATA\tRMODE\tANY\n", f);
+  fputs("@DATA\tCSECT\n", f);
+  fputs("\tYREGS\n");
+#else
 #ifdef TARGET_PDPMAC
   fprintf(asm_out_file, "\tCOPY\tPDPTOP\n");
 #endif
   fprintf(asm_out_file, "%s\tCSECT\n", mvs_csect_name ? mvs_csect_name : "");
+#endif
 }
 
 void i370_asm_end(void)
@@ -579,7 +588,6 @@ int i370_short_branch(rtx insn)
 static void
 i370_label_scan()
 {
-  printf("i370_label_scan()");
   rtx insn;
   label_node_t *lp;
   int tablejump_offset = 0;
@@ -998,7 +1006,6 @@ int mvs_check_page(void *_file, int code, int lit)
    NAME is the name of the current function.  */
 int mvs_function_check(const char *name)
 {
-  printf("mvs_function_check()\n");
 #ifdef TARGET_LE
   int lower, middle, upper;
   int i;
@@ -1026,7 +1033,6 @@ int mvs_function_check(const char *name)
 static int
 mvs_hash_alias(const char *key)
 {
-  printf("mvs_hash_alias()\n");
   int h;
   int i;
   int l = strlen(key);
@@ -1042,16 +1048,7 @@ mvs_hash_alias(const char *key)
 
 void mvs_add_alias(const char *realname, const char *aliasname, int emitted)
 {
-  printf("mvs_add_alias()\n");
-  alias_node_t *ap;
-
-#ifdef DEBUG
-  printf("mvs_add_alias: realname(%d) = '%s'\n", strlen(realname), realname);
-  printf("   aliasname(%d) = '%s'\n", strlen(aliasname), aliasname);
-  printf("   emitted = %d\n", emitted);
-#endif
-
-  ap = (alias_node_t *)xmalloc(sizeof(alias_node_t));
+  alias_node_t *ap = (alias_node_t *)xmalloc(sizeof(alias_node_t));
   if (strlen(realname) > MAX_LONG_LABEL_SIZE)
   {
     warning(0, "real name is too long - alias ignored");
@@ -1078,7 +1075,6 @@ void mvs_add_alias(const char *realname, const char *aliasname, int emitted)
 
 int mvs_need_alias(const char *realname)
 {
-  printf("mvs_need_alias: realname(%zu) = '%s'\n", strlen(realname), realname);
 #if defined(TARGET_DIGNUS) || defined(TARGET_PDPMAC)
   return 1;
 #else
@@ -1119,7 +1115,6 @@ int mvs_need_alias(const char *realname)
 
 void mvs_mark_alias(const char *realname)
 {
-  printf("mvs_mark_alias: realname(%zu) = '%s'\n", strlen(realname), realname);
   for (alias_node_t *ap = alias_anchor; ap; ap = ap->alias_next)
   {
     if (!strcmp(ap->real_name, realname))
@@ -1135,7 +1130,6 @@ void mvs_mark_alias(const char *realname)
 
 int mvs_dump_alias(FILE *f)
 {
-  printf("mvs_dump_alias: \n");
   for (alias_node_t *ap = alias_anchor; ap; ap = ap->alias_next)
   {
     if (ap->alias_used && !ap->alias_emitted)
@@ -1153,7 +1147,6 @@ int mvs_dump_alias(FILE *f)
 
 int mvs_get_alias(const char *realname, char *aliasname)
 {
-  printf("mvs_get_alias: realname(%zu) = '%s'\n", strlen(realname), realname);
 #ifdef TARGET_ALIASES
 
   for (alias_node_t *ap = alias_anchor; ap; ap = ap->alias_next)
@@ -1199,7 +1192,6 @@ int mvs_get_alias(const char *realname, char *aliasname)
 
 int mvs_check_alias(const char *realname, char *aliasname)
 {
-  printf("mvs_check_alias: realname(%zu) = '%s'\n", strlen(realname), realname);
 #ifdef TARGET_ALIASES
 
   for (alias_node_t *ap = alias_anchor; ap; ap = ap->alias_next)
@@ -1285,7 +1277,6 @@ int mvs_function_check(const char *name ATTRIBUTE_UNUSED)
 
 int unsigned_jump_follows_p(register rtx insn)
 {
-  printf("unsigned_jump_follows_p()\n");
   while (1)
   {
     register rtx tmp_insn;
@@ -1374,7 +1365,6 @@ int unsigned_jump_follows_p(register rtx insn)
 static bool
 i370_hlasm_assemble_integer(rtx x, unsigned int size, int aligned_p)
 {
-  printf("i370_hlasm_assemble_integer()\n");
   const char *int_format = NULL;
   int intmask;
 
@@ -1465,8 +1455,6 @@ i370_hlasm_assemble_integer(rtx x, unsigned int size, int aligned_p)
 static void
 i370_output_function_prologue(FILE *f)
 {
-  printf("i370_output_function_prologue(),fname=%s\n", mvs_function_name);
-
   HOST_WIDE_INT frame_usage = STACK_FRAME_BASE;
   if (cfun != NULL && cfun->su != NULL)
   {
@@ -1500,8 +1488,6 @@ i370_output_function_prologue(FILE *f)
 #ifdef TARGET_MACROS
 #if defined(TARGET_DIGNUS) || defined(TARGET_PDPMAC)
   assemble_name(f, mvs_function_name);
-  printf("before_prolog_cinder()\n");
-
   const char *eprol_macname =
 #ifdef TARGET_DIGNUS
       "DCCPRLG";
@@ -1515,7 +1501,6 @@ i370_output_function_prologue(FILE *f)
   {
     fprintf(f, "\t%s CINDEX=%d,FRAME=%ld,BASER=%d,ENTRY=%s\n", eprol_macname, mvs_page_num, frame_usage, BASE_REGISTER, mvs_need_entry ? "YES" : "NO");
   }
-  printf("after_prolog_cinder()\n");
   fprintf(f, "\tB\t@@FEN%d\n", mvs_page_num);
 #ifdef TARGET_DIGNUS
   fprintf(f, "@FRAMESIZE_%d DC F'%d'\n",
@@ -1644,9 +1629,6 @@ i370_output_function_prologue(FILE *f)
 
 void i370_output_function_epilogue(FILE *file)
 {
-  printf("i370_output_function_epilogue(),fname=%s\n", mvs_function_name);
-  int i;
-
   check_label_emit();
   mvs_check_page(file, 14, 0);
   fprintf(file, "* Function %s epilogue\n", CURRFUNC);
@@ -1662,7 +1644,7 @@ void i370_output_function_epilogue(FILE *file)
 #endif
 #ifdef TARGET_LE
   fprintf(file, "\tEDCEPIL\n");
-  fprintf(file, "\tDROP\t%d\n", BASE_REGISTER);
+  fprintf(file, "\tDROP\t%i\n", BASE_REGISTER);
 #endif
 
 #else /* !TARGET_MACROS */
@@ -1672,7 +1654,7 @@ void i370_output_function_epilogue(FILE *file)
   fprintf(file, "\tL\t14,12(,13)\n");
   fprintf(file, "\tLM\t2,12,28(13)\n");
   fprintf(file, "\tBALR\t1,14\n");
-  fprintf(file, "\tDROP\t%d\n", BASE_REGISTER);
+  fprintf(file, "\tDROP\t%i\n", BASE_REGISTER);
   fprintf(file, "\tDC\tA(");
   assemble_name(file, mvs_function_name);
   fprintf(file, ")\n");
@@ -1685,11 +1667,11 @@ void i370_output_function_epilogue(FILE *file)
   fprintf(file, "\tLTORG\n");
   fprintf(file, "* Function %s page table\n", CURRFUNC);
   fprintf(file, "\tDS\t0F\n");
-  fprintf(file, "@@PGT%d\tEQU\t*\n", function_base_page);
+  fprintf(file, "@@PGT%i\tEQU\t*\n", function_base_page);
 
   mvs_free_label_list();
-  for (i = function_base_page; i < mvs_page_num; i++)
-    fprintf(file, "\tDC\tA(@@PG%d)\n", i);
+  for (int i = function_base_page; i < mvs_page_num; i++)
+    fprintf(file, "\tDC\tA(@@PG%i)\n", i);
   mvs_need_entry = 0;
 }
 
@@ -1820,7 +1802,6 @@ int t_vfprintf(FILE *file, const char *format, va_list arg)
 
 void i370_register_pragmas(void)
 {
-  printf("i370_register_pragmas()\n");
 #if 0
   cpp_register_pragma (PFILE, 0, "map", i370_pr_map);
   cpp_register_pragma (PFILE, 0, "nomargins", i370_pr_skipit);
@@ -1837,7 +1818,6 @@ void i370_register_pragmas(void)
 static int
 i370_function_arg_size(machine_mode mode, const_tree type)
 {
-  printf("i370_function_arg_size()\n");
   if (type)
     return int_size_in_bytes(type);
 
@@ -1858,7 +1838,6 @@ static bool
 i370_single_field_struct_p(enum tree_code code, const_tree type,
                            bool strict_size_check_p)
 {
-  printf("i370_single_field_struct_p()\n");
   int empty_base_seen = 0;
   bool zero_width_bf_skipped_p = false;
   const_tree orig_type = type;
@@ -1969,7 +1948,6 @@ i370_single_field_struct_p(enum tree_code code, const_tree type,
 static bool
 i370_function_arg_vector(machine_mode mode, const_tree type)
 {
-  printf("i370_function_arg_vector()\n");
   if (i370_function_arg_size(mode, type) > 16)
     return false;
 
@@ -1989,7 +1967,6 @@ i370_function_arg_vector(machine_mode mode, const_tree type)
 static bool
 i370_function_arg_float(machine_mode mode, const_tree type)
 {
-  printf("i370_function_arg_float()\n");
   if (i370_function_arg_size(mode, type) > 8)
     return false;
 
@@ -2014,7 +1991,6 @@ i370_function_arg_float(machine_mode mode, const_tree type)
 static bool
 i370_function_arg_integer(machine_mode mode, const_tree type)
 {
-  printf("i370_function_arg_integer()\n");
   int size = i370_function_arg_size(mode, type);
   if (size > 8)
     return false;
@@ -2043,7 +2019,6 @@ i370_function_arg_integer(machine_mode mode, const_tree type)
 static bool
 i370_pass_by_reference(cumulative_args_t, const function_arg_info &arg)
 {
-  printf("i370_pass_by_reference()\n");
   int size = i370_function_arg_size(arg.mode, arg.type);
 
   if (i370_function_arg_vector(arg.mode, arg.type))
@@ -2070,7 +2045,6 @@ static void
 i370_function_arg_advance(cumulative_args_t cum_v,
                           const function_arg_info &arg)
 {
-  printf("i370_function_arg_advance()\n");
   CUMULATIVE_ARGS *cum = get_cumulative_args(cum_v);
   int size = i370_function_arg_size(arg.mode, arg.type);
   cum += ((size + UNITS_PER_LONG - 1) / UNITS_PER_LONG);
@@ -2110,7 +2084,6 @@ i370_function_arg_advance(cumulative_args_t cum_v,
 static rtx
 i370_function_arg(cumulative_args_t cum_v, const function_arg_info &arg)
 {
-  printf("i370_function_arg()\n");
   CUMULATIVE_ARGS *cum = get_cumulative_args(cum_v);
 
   if (i370_function_arg_float(arg.mode, arg.type) || i370_function_arg_integer(arg.mode, arg.type))
@@ -2135,7 +2108,6 @@ i370_function_arg(cumulative_args_t cum_v, const function_arg_info &arg)
 static pad_direction
 i370_function_arg_padding(machine_mode mode, const_tree type)
 {
-  printf("i370_function_arg_padding()\n");
   return PAD_UPWARD;
 }
 
@@ -2146,7 +2118,6 @@ i370_function_arg_padding(machine_mode mode, const_tree type)
 static bool
 i370_return_in_memory(const_tree type, const_tree fundecl ATTRIBUTE_UNUSED)
 {
-  printf("i370_return_in_memory()\n");
   /* We accept small integral (and similar) types.  */
   if (INTEGRAL_TYPE_P(type) || POINTER_TYPE_P(type) || TREE_CODE(type) == OFFSET_TYPE || TREE_CODE(type) == REAL_TYPE)
     return int_size_in_bytes(type) > 8;
@@ -2168,13 +2139,11 @@ i370_return_in_memory(const_tree type, const_tree fundecl ATTRIBUTE_UNUSED)
 
 void i370_asm_output_ident_directive(const char *ident_str)
 {
-  printf("i370_asm_output_ident_directive()\n");
   fprintf(asm_out_file, "* Ident: %s\n", ident_str);
 }
 
 void i370_stabs_asm_out_constructor(rtx symbol, int priority ATTRIBUTE_UNUSED)
 {
-  printf("i370_stabs_asm_out_constructor()\n");
   fprintf(asm_out_file, "* CTOR,Prio=%i", priority);
   assemble_name(asm_out_file, XSTR(symbol, 0));
   fputc('\n', asm_out_file);
@@ -2182,7 +2151,6 @@ void i370_stabs_asm_out_constructor(rtx symbol, int priority ATTRIBUTE_UNUSED)
 
 void i370_stabs_asm_out_destructor(rtx symbol, int priority ATTRIBUTE_UNUSED)
 {
-  printf("i370_stabs_asm_out_destructor()\n");
   fprintf(asm_out_file, "* DTOR,Prio=%i", priority);
   assemble_name(asm_out_file, XSTR(symbol, 0));
   fputc('\n', asm_out_file);
@@ -2196,19 +2164,15 @@ void i370_stabs_asm_out_destructor(rtx symbol, int priority ATTRIBUTE_UNUSED)
 static bool
 i370_call_saved_register_used(tree call_expr)
 {
-  printf("i370_call_saved_register_used()\n");
   CUMULATIVE_ARGS cum_v;
-  cumulative_args_t cum;
   tree parameter;
   rtx parm_rtx;
-  int reg, i;
 
   INIT_CUMULATIVE_ARGS(cum_v, NULL, NULL, 0, 0);
-  cum = pack_cumulative_args(&cum_v);
-
-  for (i = 0; i < call_expr_nargs(call_expr); i++)
+  cumulative_args_t cum = pack_cumulative_args(&cum_v);
+  for (int i = 0; i < call_expr_nargs(call_expr); i++)
   {
-    parameter = CALL_EXPR_ARG(call_expr, i);
+    tree parameter = CALL_EXPR_ARG(call_expr, i);
     gcc_assert(parameter);
 
     /* For an undeclared variable passed as parameter we will get
@@ -2231,22 +2195,18 @@ i370_call_saved_register_used(tree call_expr)
 
     if (REG_P(parm_rtx))
     {
-      for (reg = 0; reg < REG_NREGS(parm_rtx); reg++)
+      for (int reg = 0; reg < REG_NREGS(parm_rtx); reg++)
         if (!call_used_or_fixed_reg_p(reg + REGNO(parm_rtx)))
           return true;
     }
 
     if (GET_CODE(parm_rtx) == PARALLEL)
     {
-      int i;
-
-      for (i = 0; i < XVECLEN(parm_rtx, 0); i++)
+      for (int i = 0; i < XVECLEN(parm_rtx, 0); i++)
       {
         rtx r = XEXP(XVECEXP(parm_rtx, 0, i), 0);
-
         gcc_assert(REG_P(r));
-
-        for (reg = 0; reg < REG_NREGS(r); reg++)
+        for (int reg = 0; reg < REG_NREGS(r); reg++)
           if (!call_used_or_fixed_reg_p(reg + REGNO(r)))
             return true;
       }
@@ -2291,12 +2251,6 @@ i370_function_and_libcall_value(machine_mode mode,
                                 const_tree fntype_or_decl,
                                 bool outgoing ATTRIBUTE_UNUSED)
 {
-  printf("i370_function_and_libcall_value()\n");
-  /* For vector return types it is important to use the RET_TYPE
-     argument whenever available since the middle-end might have
-     changed the mode to a scalar mode.  */
-  bool vector_ret_type_p = ((ret_type && VECTOR_TYPE_P(ret_type)) || (!ret_type && VECTOR_MODE_P(mode)));
-
   /* For normal functions perform the promotion as
      promote_function_mode would do.  */
   if (ret_type)
@@ -2306,13 +2260,13 @@ i370_function_and_libcall_value(machine_mode mode,
                                  fntype_or_decl, 1);
   }
 
-  gcc_assert(GET_MODE_CLASS(mode) == MODE_INT || SCALAR_FLOAT_MODE_P(mode) || (TARGET_VX_ABI && vector_ret_type_p));
+  gcc_assert(GET_MODE_CLASS(mode) == MODE_INT || SCALAR_FLOAT_MODE_P(mode));
   gcc_assert(GET_MODE_SIZE(mode) <= 8);
 
-  if (!TARGET_SOFT_FLOAT && SCALAR_FLOAT_MODE_P(mode))
-    return gen_rtx_REG(mode, 16);
-  else if (GET_MODE_SIZE(mode) <= UNITS_PER_LONG || UNITS_PER_LONG == UNITS_PER_WORD)
+  if (GET_MODE_SIZE(mode) <= UNITS_PER_LONG || UNITS_PER_LONG == UNITS_PER_WORD)
+  {
     return gen_rtx_REG(mode, 2);
+  }
   else if (GET_MODE_SIZE(mode) == 2 * UNITS_PER_LONG)
   {
     /* This case is triggered when returning a 64 bit value with
@@ -2320,10 +2274,8 @@ i370_function_and_libcall_value(machine_mode mode,
      register it has to be forced into a 32 bit register pair in
      order to match the ABI.  */
     rtvec p = rtvec_alloc(2);
-
     RTVEC_ELT(p, 0) = gen_rtx_EXPR_LIST(SImode, gen_rtx_REG(SImode, 2), const0_rtx);
     RTVEC_ELT(p, 1) = gen_rtx_EXPR_LIST(SImode, gen_rtx_REG(SImode, 3), GEN_INT(4));
-
     return gen_rtx_PARALLEL(mode, p);
   }
 
@@ -2335,7 +2287,6 @@ i370_function_and_libcall_value(machine_mode mode,
 static rtx
 i370_libcall_value(machine_mode mode, const_rtx fun ATTRIBUTE_UNUSED)
 {
-  printf("i370_libcall_value()\n");
   return i370_function_and_libcall_value(mode, NULL_TREE,
                                          NULL_TREE, true);
 }
@@ -2345,17 +2296,28 @@ static rtx
 i370_function_value(const_tree ret_type, const_tree fn_decl_or_type,
                     bool outgoing)
 {
-  printf("i370_function_value()\n");
   return i370_function_and_libcall_value(TYPE_MODE(ret_type), ret_type,
                                          fn_decl_or_type, outgoing);
+}
+
+/* Define platform dependent macros.  */
+void
+i370_cpu_cpp_builtins (cpp_reader *pfile)
+{
+  cpp_define (pfile, "__i370__");
+  /* MVS-TODO: Define __MVS__, __VSE__, __CMS__, __MUSIC__, __PDOS__, __UDOS__, etc */
+  struct cl_target_option opts;
+  cl_target_option_save (&opts, &global_options, &global_options_set);
 }
 
 #undef TARGET_LIBCALL_VALUE
 #define TARGET_LIBCALL_VALUE i370_libcall_value
 #undef TARGET_PASS_BY_REFERENCE
 #define TARGET_PASS_BY_REFERENCE i370_pass_by_reference
+/*
 #undef TARGET_FUNCTION_OK_FOR_SIBCALL
 #define TARGET_FUNCTION_OK_FOR_SIBCALL i370_function_ok_for_sibcall
+*/
 #undef TARGET_FUNCTION_ARG
 #define TARGET_FUNCTION_ARG i370_function_arg
 #undef TARGET_FUNCTION_ARG_ADVANCE
