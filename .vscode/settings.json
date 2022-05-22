@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "pr88045.C": "cpp",
+        "regex": "cpp",
+        "*.def": "cpp",
+        "*.inc": "cpp",
+        "internet": "cpp",
+        "typeindex": "cpp",
+        "typeinfo": "cpp",
+        "any": "cpp"
+    }
+}

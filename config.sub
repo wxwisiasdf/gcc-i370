@@ -1276,7 +1276,8 @@ case $cpu-$vendor in
 			| x86 | x86_64 | xc16x | xgate | xps100 \
 			| xstormy16 | xtensa* \
 			| ymp \
-			| z8k | z80)
+			| z8k | z80 \
+			| i370 )
 				;;
 
 			*)
@@ -1843,7 +1844,7 @@ case $vendor in
 			*-os400*)
 				vendor=ibm
 				;;
-			s390-* | s390x-*)
+			s390-* | s390x-* | i370-*)
 				vendor=ibm
 				;;
 			*-ptx*)

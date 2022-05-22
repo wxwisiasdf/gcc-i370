@@ -1,0 +1,2 @@
+i370-c.o: $(srcdir)/config/i370/i370-c.cc $(srcdir)/config/i370/i370-protos.h
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $<

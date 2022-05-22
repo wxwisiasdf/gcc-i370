@@ -88,7 +88,7 @@ LIST = aarch64-elf aarch64-linux-gnu aarch64-rtems \
   pru-elf \
   riscv32-unknown-linux-gnu riscv64-unknown-linux-gnu \
   powerpc-ibm-aix7.1 powerpc-ibm-aix7.2 \
-  rl78-elf rx-elf s390-linux-gnu s390x-linux-gnu s390x-ibm-tpf sh-elf \
+  rl78-elf rx-elf s390-linux-gnu s390x-linux-gnu s390x-ibm-linux i370-mvs tpf sh-elf \
   shle-linux sh-netbsdelf sh-superh-elf \
   sh-rtems sh-wrs-vxworks sparc-elf \
   sparc-leon-elf sparc-rtems sparc-linux-gnu \

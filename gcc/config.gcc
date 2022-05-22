@@ -540,6 +540,11 @@ s390*-*-*)
 	extra_options="${extra_options} fused-madd.opt"
 	extra_headers="s390intrin.h htmintrin.h htmxlintrin.h vecintrin.h"
 	;;
+i370*-*)
+	cpu_type=i370
+	d_target_objs="i370-d.o"
+	extra_options="${extra_options} fused-madd.opt"
+	;;
 # Note the 'l'; we need to be able to match e.g. "shle" or "shl".
 sh[123456789lbe]*-*-* | sh-*-*)
 	cpu_type=sh
@@ -3204,6 +3209,16 @@ s390x-ibm-tpf*)
 	thread_file='tpf'
 	extra_options="${extra_options} s390/tpf.opt"
 	tmake_file="${tmake_file} s390/t-s390"
+	;;
+i370-*)
+	tm_file="i370/i370.h glibc-stdint.h i370/mvs.h"
+	tm_p_file=i370/i370-protos.h
+	c_target_objs="${c_target_objs} i370-c.o"
+	cxx_target_objs="${cxx_target_objs} i370-c.o"
+	md_file=i370/i370.md
+	extra_modes=i370/i370-modes.def
+	out_file=i370/i370.cc
+	tmake_file="${tmake_file} i370/t-i370 i370/t-mvs"
 	;;
 sh-*-elf* | sh[12346l]*-*-elf* | \
   sh-*-linux* | sh[2346lbe]*-*-linux* | \
