@@ -30,6 +30,7 @@ extern void i370_asm_label_ref (FILE *f, const char *name);
 extern void i370_cpu_cpp_builtins (cpp_reader *pfile);
 
 #ifdef RTX_CODE
+extern void i370_print_operand (FILE *f, rtx xv, int code);
 extern int i370_branch_dest (rtx insn);
 extern int i370_branch_length (rtx insn);
 extern int i370_short_branch (rtx insn);

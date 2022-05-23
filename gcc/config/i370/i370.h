@@ -234,45 +234,51 @@ extern void mvs_mark_alias(const char *);
 
 /* Define special register allocation order desired. */
 
-#define FIXED_REGISTERS				\
-{ 0, 0, 0, 0,					\
-  0, 0, 0, 0,					\
-  0, 0, 0, 0,					\
-  0, 1, 1, 1,					\
-  0, 0, 0, 0,					\
-  0, 0, 0, 0,					\
-  0, 0, 0, 0,					\
-  0, 0, 0, 0,					\
-  1, 1, 1, 1,					\
-  1, 1,						\
-  0, 0, 0, 0,					\
-  0, 0, 0, 0,					\
-  0, 0, 0, 0,					\
-  0, 0, 0, 0 }
+#define FIXED_REGISTERS \
+  {                     \
+    0, 0, 0, 0,         \
+        0, 0, 0, 0,     \
+        0, 0, 0, 0,     \
+        0, 1, 1, 1,     \
+        0, 0, 0, 0,     \
+        0, 0, 0, 0,     \
+        0, 0, 0, 0,     \
+        0, 0, 0, 0,     \
+        1, 1, 1, 1,     \
+        1, 1,           \
+        0, 0, 0, 0,     \
+        0, 0, 0, 0,     \
+        0, 0, 0, 0,     \
+        0, 0, 0, 0      \
+  }
 
-#define CALL_REALLY_USED_REGISTERS		\
-{ 1, 1, 1, 1,	/* r0 - r15 */			\
-  1, 1, 0, 0,					\
-  0, 0, 0, 0,					\
-  0, 0, 0, 0,					\
-  1, 1, 1, 1,	/* f0 (16) - f15 (31) */	\
-  1, 1, 1, 1,					\
-  1, 1, 1, 1,					\
-  1, 1, 1, 1,					\
-  1, 1, 1, 1,	/* arg, cc, fp, ret addr */	\
-  0, 0,		/* a0 (36), a1 (37) */		\
-  1, 1, 1, 1,	/* v16 (38) - v23 (45) */	\
-  1, 1, 1, 1,					\
-  1, 1, 1, 1,	/* v24 (46) - v31 (53) */	\
-  1, 1, 1, 1 }
+#define CALL_REALLY_USED_REGISTERS              \
+  {                                             \
+    1, 1, 1, 1, /* r0 - r15 */                  \
+        1, 1, 0, 0,                             \
+        0, 0, 0, 0,                             \
+        0, 0, 0, 0,                             \
+        1, 1, 1, 1, /* f0 (16) - f15 (31) */    \
+        1, 1, 1, 1,                             \
+        1, 1, 1, 1,                             \
+        1, 1, 1, 1,                             \
+        1, 1, 1, 1, /* arg, cc, fp, ret addr */ \
+        0, 0,       /* a0 (36), a1 (37) */      \
+        1, 1, 1, 1, /* v16 (38) - v23 (45) */   \
+        1, 1, 1, 1,                             \
+        1, 1, 1, 1, /* v24 (46) - v31 (53) */   \
+        1, 1, 1, 1                              \
+  }
 
 /* Preferred register allocation order.  */
-#define REG_ALLOC_ORDER							\
-  {  1, 2, 3, 4, 5, 0, 12, 11, 10, 9, 8, 7, 6, 14, 13,			\
-     16, 17, 18, 19, 20, 21, 22, 23,					\
-     24, 25, 26, 27, 28, 29, 30, 31,					\
-     38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53,	\
-     15, 32, 33, 34, 35, 36, 37 }
+#define REG_ALLOC_ORDER                                                 \
+  {                                                                     \
+    1, 2, 3, 4, 5, 0, 12, 11, 10, 9, 8, 7, 6, 14, 13,                   \
+        16, 17, 18, 19, 20, 21, 22, 23,                                 \
+        24, 25, 26, 27, 28, 29, 30, 31,                                 \
+        38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, \
+        15, 32, 33, 34, 35, 36, 37                                      \
+  }
 
 /* Standard register usage.  */
 
@@ -682,16 +688,20 @@ enum reg_class
 
 #define INIT_CUMULATIVE_ARGS(CUM, FNTYPE, LIBNAME, INDIRECT, ...) ((CUM) = 0)
 
-#define ELIMINABLE_REGS						\
-{{ FRAME_POINTER_REGNUM, STACK_POINTER_REGNUM },		\
- { FRAME_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM },		\
- { ARG_POINTER_REGNUM, STACK_POINTER_REGNUM },			\
- { ARG_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM },		\
- { RETURN_ADDRESS_POINTER_REGNUM, STACK_POINTER_REGNUM },	\
- { RETURN_ADDRESS_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM },	\
- { BASE_REGNUM, BASE_REGNUM }}
+#define ELIMINABLE_REGS                                             \
+  {                                                                 \
+    {FRAME_POINTER_REGNUM, STACK_POINTER_REGNUM},                   \
+        {FRAME_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM},          \
+        {ARG_POINTER_REGNUM, STACK_POINTER_REGNUM},                 \
+        {ARG_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM},            \
+        {RETURN_ADDRESS_POINTER_REGNUM, STACK_POINTER_REGNUM},      \
+        {RETURN_ADDRESS_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM}, \
+    {                                                               \
+      BASE_REGNUM, BASE_REGNUM                                      \
+    }                                                               \
+  }
 
-#define TARGET_CPU_CPP_BUILTINS() i370_cpu_cpp_builtins (pfile)
+#define TARGET_CPU_CPP_BUILTINS() i370_cpu_cpp_builtins(pfile)
 
 /* The basic stack layout looks like this: the stack pointer points
    to the register save area for called functions.  Above that area
@@ -713,15 +723,15 @@ enum reg_class
 
 /* Defining this macro makes __builtin_frame_address(0) and
    __builtin_return_address(0) work with -fomit-frame-pointer.  */
-#define INITIAL_FRAME_ADDRESS_RTX                                             \
-  (plus_constant (Pmode, arg_pointer_rtx, -STACK_POINTER_OFFSET))
+#define INITIAL_FRAME_ADDRESS_RTX \
+  (plus_constant(Pmode, arg_pointer_rtx, -STACK_POINTER_OFFSET))
 
 /* The return address of the current frame is retrieved
    from the initial value of register RETURN_REGNUM.
    For frames farther back, we use the stack slot where
    the corresponding RETURN_REGNUM register was saved.  */
-#define DYNAMIC_CHAIN_ADDRESS(FRAME)                                          \
-  (1 ? plus_constant (Pmode, (FRAME), STACK_POINTER_OFFSET - UNITS_PER_LONG) : (FRAME))
+#define DYNAMIC_CHAIN_ADDRESS(FRAME) \
+  (1 ? plus_constant(Pmode, (FRAME), STACK_POINTER_OFFSET - UNITS_PER_LONG) : (FRAME))
 
 /* For -mpacked-stack this adds 160 - 8 (96 - 4) to the output of
    builtin_frame_address.  Otherwise arg pointer -
@@ -730,12 +740,12 @@ enum reg_class
    somewhere into the middle of the local variables since the packed
    stack layout generally does not need all the bytes in the register
    save area.  */
-#define FRAME_ADDR_RTX(FRAME)			\
-  DYNAMIC_CHAIN_ADDRESS ((FRAME))
+#define FRAME_ADDR_RTX(FRAME) \
+  DYNAMIC_CHAIN_ADDRESS((FRAME))
 
 /* Describe how we implement __builtin_eh_return.  */
 #define EH_RETURN_DATA_REGNO(N) ((N) < 4 ? (N) + 6 : INVALID_REGNUM)
-#define EH_RETURN_HANDLER_RTX gen_rtx_MEM (Pmode, return_address_pointer_rtx)
+#define EH_RETURN_HANDLER_RTX gen_rtx_MEM(Pmode, return_address_pointer_rtx)
 
 /* Update the data in CUM to advance over an argument of mode MODE and
    data type TYPE.  (TYPE is null for libcalls where that information
@@ -1239,25 +1249,27 @@ enum reg_class
   }
 #endif
 
-/*
-#define CC_STATUS_SET(V1, V2)						\
-{									\
-  cc_status.flags = 0;							\
-  cc_status.value1 = (V1);						\
-  cc_status.value2 = (V2);						\
-  if (cc_status.value1							\
-      && reg_mentioned_p (cc_status.value1, cc_status.value2))		\
-    cc_status.value2 = 0;						\
-}
-*/
+struct i370_cc_flags
+{
+  int flags;
+  const_rtx value1;
+  const_rtx value2;
+};
+extern struct i370_cc_flags cc_status;
 
-/*
-#define CC_STATUS_INIT \
-{ \
-  cc_status.flags = 0; \
-  cc_status.value1 = 0; \
-}
-*/
+#define CC_STATUS_SET(V1, V2)                                                    \
+  {                                                                              \
+    cc_status.flags = 0;                                                         \
+    cc_status.value1 = (V1);                                                     \
+    cc_status.value2 = (V2);                                                     \
+    if (cc_status.value1 && reg_mentioned_p(cc_status.value1, cc_status.value2)) \
+      cc_status.value2 = 0;                                                      \
+  }
+
+#define CC_STATUS_INIT   \
+  {                      \
+    cc_status.flags = 0; \
+  }
 
 #define OUTPUT_JUMP(NORMAL, FLOAT, NO_OV) \
   {                                       \
@@ -1292,21 +1304,19 @@ enum reg_class
 /* How to refer to registers in assembler output.  This sequence is
    indexed by compiler's hard-register-number (see above).  */
 
-#define REGISTER_NAMES							\
-  { "R0",  "R1",  "R2",  "R3",  "R4",  "R5",  "R6",  "R7",	\
-    "R8",  "R9",  "R10", "R11", "R12", "R13", "R14", "R15",	\
-    "F0",  "F2",  "F4",  "F6",  "F1",  "F3",  "F5",  "F7",	\
-    "F8",  "F10", "F12", "F14", "F9",  "F11", "F13", "F15",	\
-    "AP",  "CC",  "FP",  "RP",  "A0",  "A1",			\
-    "V16", "V18", "V20", "V22", "V17", "V19", "V21", "V23",	\
-    "V24", "V26", "V28", "V30", "V25", "V27", "V29", "V31"	\
+#define REGISTER_NAMES                                          \
+  {                                                             \
+    "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",             \
+        "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15",   \
+        "F0", "F2", "F4", "F6", "F1", "F3", "F5", "F7",         \
+        "F8", "F10", "F12", "F14", "F9", "F11", "F13", "F15",   \
+        "AP", "CC", "FP", "RP", "A0", "A1",                     \
+        "V16", "V18", "V20", "V22", "V17", "V19", "V21", "V23", \
+        "V24", "V26", "V28", "V30", "V25", "V27", "V29", "V31"  \
   }
 
-#define ADDITIONAL_REGISTER_NAMES					\
-  { { "V0", 16 }, { "V2",  17 }, { "V4",  18 }, { "V6",  19 },		\
-    { "V1", 20 }, { "V3",  21 }, { "V5",  22 }, { "V7",  23 },          \
-    { "V8", 24 }, { "V10", 25 }, { "V12", 26 }, { "V14", 27 },          \
-    { "V9", 28 }, { "V11", 29 }, { "V13", 30 }, { "V15", 31 } };
+#define ADDITIONAL_REGISTER_NAMES \
+  {{"V0", 16}, {"V2", 17}, {"V4", 18}, {"V6", 19}, {"V1", 20}, {"V3", 21}, {"V5", 22}, {"V7", 23}, {"V8", 24}, {"V10", 25}, {"V12", 26}, {"V14", 27}, {"V9", 28}, {"V11", 29}, {"V13", 30}, {"V15", 31}};
 
 #ifdef TARGET_ALIASES
 #define TARGET_ASM_FILE_END(FILE) \
@@ -1590,176 +1600,7 @@ enum reg_class
    CODE is a letter or dot (`z' in `%z0') or 0 if no letter was specified.
    For `%' followed by punctuation, CODE is the punctuation and XV is null.  */
 
-#define PRINT_OPERAND(FILE, XV, CODE)                                                    \
-  {                                                                                      \
-    switch (GET_CODE(XV))                                                                \
-    {                                                                                    \
-      static char curreg[4];                                                             \
-    case REG:                                                                            \
-      if (CODE == 'N')                                                                   \
-        strcpy(curreg, reg_names[REGNO(XV) + 1]);                                        \
-      else                                                                               \
-        strcpy(curreg, reg_names[REGNO(XV)]);                                            \
-      fprintf(FILE, "%s", curreg);                                                       \
-      break;                                                                             \
-    case MEM:                                                                            \
-    {                                                                                    \
-      rtx addr = XEXP(XV, 0);                                                            \
-      if (CODE == 'O')                                                                   \
-      {                                                                                  \
-        if (GET_CODE(addr) == PLUS)                                                      \
-          fprintf(FILE, "%d", INTVAL(XEXP(addr, 1)));                                    \
-        else                                                                             \
-          fprintf(FILE, "0");                                                            \
-      }                                                                                  \
-      else if (CODE == 'R')                                                              \
-      {                                                                                  \
-        if (GET_CODE(addr) == PLUS)                                                      \
-          fprintf(FILE, "%s", reg_names[REGNO(XEXP(addr, 0))]);                          \
-        else                                                                             \
-          fprintf(FILE, "%s", reg_names[REGNO(addr)]);                                   \
-      }                                                                                  \
-      else                                                                               \
-        output_address(GET_MODE(XV), XEXP(XV, 0));                                       \
-    }                                                                                    \
-    break;                                                                               \
-    case SYMBOL_REF:                                                                     \
-    case LABEL_REF:                                                                      \
-      mvs_page_lit += 4;                                                                 \
-      if (SYMBOL_REF_FLAG(XV))                                                           \
-      {                                                                                  \
-        fprintf(FILE, "=V(");                                                            \
-        output_addr_const(FILE, XV);                                                     \
-        fprintf(FILE, ")");                                                              \
-        mvs_mark_alias(XSTR(XV, 0));                                                     \
-      }                                                                                  \
-      else                                                                               \
-      {                                                                                  \
-        fprintf(FILE, "=A(");                                                            \
-        output_addr_const(FILE, XV);                                                     \
-        fprintf(FILE, ")");                                                              \
-      }                                                                                  \
-      break;                                                                             \
-    case CONST_INT:                                                                      \
-      if (CODE == 'B')                                                                   \
-        fprintf(FILE, "%d", INTVAL(XV) & 0xff);                                          \
-      else if (CODE == 'X')                                                              \
-        fprintf(FILE, "%02X", INTVAL(XV) & 0xff);                                        \
-      else if (CODE == 'h')                                                              \
-        fprintf(FILE, "%d", (INTVAL(XV) << 16) >> 16);                                   \
-      else if (CODE == 'H')                                                              \
-      {                                                                                  \
-        mvs_page_lit += 2;                                                               \
-        fprintf(FILE, "=H'%d'", (INTVAL(XV) << 16) >> 16);                               \
-      }                                                                                  \
-      else if (CODE == 'K')                                                              \
-      {                                                                                  \
-        /* auto sign-extension of signed 16-bit to signed 32-bit */                      \
-        mvs_page_lit += 4;                                                               \
-        fprintf(FILE, "=F'%d'", (INTVAL(XV) << 16) >> 16);                               \
-      }                                                                                  \
-      else if (CODE == 'W')                                                              \
-      {                                                                                  \
-        /* hand-built sign-extension of signed 32-bit to 64-bit */                       \
-        mvs_page_lit += 8;                                                               \
-        if (0 <= INTVAL(XV))                                                             \
-        {                                                                                \
-          fprintf(FILE, "=XL8'00000000");                                                \
-        }                                                                                \
-        else                                                                             \
-        {                                                                                \
-          fprintf(FILE, "=XL8'FFFFFFFF");                                                \
-        }                                                                                \
-        fprintf(FILE, "%08X'", INTVAL(XV));                                              \
-      }                                                                                  \
-      else                                                                               \
-      {                                                                                  \
-        mvs_page_lit += 4;                                                               \
-        fprintf(FILE, "=F'%d'", INTVAL(XV));                                             \
-      }                                                                                  \
-      break;                                                                             \
-    case CONST_DOUBLE:                                                                   \
-      if (GET_MODE(XV) == DImode)                                                        \
-      {                                                                                  \
-        if (CODE == 'M')                                                                 \
-        {                                                                                \
-          mvs_page_lit += 4;                                                             \
-          fprintf(FILE, "=XL4'%08X'", CONST_DOUBLE_LOW(XV));                             \
-        }                                                                                \
-        else if (CODE == 'L')                                                            \
-        {                                                                                \
-          mvs_page_lit += 4;                                                             \
-          fprintf(FILE, "=XL4'%08X'", CONST_DOUBLE_HIGH(XV));                            \
-        }                                                                                \
-        else                                                                             \
-        {                                                                                \
-          mvs_page_lit += 8;                                                             \
-          fprintf(FILE, "=XL8'%08X%08X'", CONST_DOUBLE_LOW(XV),                          \
-                  CONST_DOUBLE_HIGH(XV));                                                \
-        }                                                                                \
-      }                                                                                  \
-      else                                                                               \
-      {                                                                                  \
-        if (GET_MODE(XV) == SFmode)                                                      \
-        {                                                                                \
-          /*REAL_VALUE_TYPE rval;                                                        \
-          REAL_VALUE_FROM_CONST_DOUBLE(rval, XV);*/                                      \
-          mvs_page_lit += 4;                                                             \
-          /*fprintf (FILE, "=E'%s'", mvs_make_float(rval));*/                            \
-        }                                                                                \
-        else if (GET_MODE(XV) == DFmode)                                                 \
-        {                                                                                \
-          /*REAL_VALUE_TYPE rval;                                                        \
-          REAL_VALUE_FROM_CONST_DOUBLE(rval, XV);*/                                      \
-          mvs_page_lit += 8;                                                             \
-          /*fprintf (FILE, "=D'%s'", mvs_make_float(rval));*/                            \
-        }                                                                                \
-        else                                                                             \
-        {                                                                                \
-          mvs_page_lit += 8;                                                             \
-          fprintf(FILE, "=XL8'%08X%08X'",                                                \
-                  CONST_DOUBLE_HIGH(XV), CONST_DOUBLE_LOW(XV));                          \
-        }                                                                                \
-      }                                                                                  \
-      break;                                                                             \
-    case CONST:                                                                          \
-      if (GET_CODE(XEXP(XV, 0)) == PLUS && GET_CODE(XEXP(XEXP(XV, 0), 0)) == SYMBOL_REF) \
-      {                                                                                  \
-        mvs_page_lit += 4;                                                               \
-        if (SYMBOL_REF_FLAG(XEXP(XEXP(XV, 0), 0)))                                       \
-        {                                                                                \
-          int xx = INTVAL(XEXP(XEXP(XV, 0), 1));                                         \
-          fprintf(FILE, "=V(");                                                          \
-          ASM_OUTPUT_LABELREF(FILE,                                                      \
-                              XSTR(XEXP(XEXP(XV, 0), 0), 0));                            \
-          if ((unsigned)xx < 4096)                                                       \
-            fprintf(FILE, ")\n\tLA\t%s,%d(0,%s)", curreg,                                \
-                    xx,                                                                  \
-                    curreg);                                                             \
-          else                                                                           \
-            fprintf(FILE, ")\n\tA\t%s,=F'%d'", curreg,                                   \
-                    xx);                                                                 \
-          mvs_mark_alias(XSTR(XEXP(XEXP(XV, 0), 0), 0));                                 \
-        }                                                                                \
-        else                                                                             \
-        {                                                                                \
-          fprintf(FILE, "=A(");                                                          \
-          output_addr_const(FILE, XV);                                                   \
-          fprintf(FILE, ")");                                                            \
-        }                                                                                \
-      }                                                                                  \
-      else                                                                               \
-      {                                                                                  \
-        mvs_page_lit += 4;                                                               \
-        fprintf(FILE, "=F'");                                                            \
-        output_addr_const(FILE, XV);                                                     \
-        fprintf(FILE, "'");                                                              \
-      }                                                                                  \
-      break;                                                                             \
-    default:                                                                             \
-      abort();                                                                           \
-    }                                                                                    \
-  }
+#define PRINT_OPERAND(FILE, XV, CODE) i370_print_operand(FILE, XV, CODE)
 
 #define PRINT_OPERAND_ADDRESS(FILE, ADDR)                        \
   {                                                              \

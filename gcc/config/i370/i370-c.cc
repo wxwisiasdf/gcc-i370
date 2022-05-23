@@ -3,7 +3,7 @@
    Free Software Foundation, Inc.
    Contributed by Jan Stein (jan@cd.chalmers.se).
    Modified for OS/390 LanguageEnvironment C by Dave Pitts (dpitts@cozx.com)
-   Hacked for Linux-ELF/390 by Linas Vepstas (linas@linas.org) 
+   Hacked for Linux-ELF/390 by Linas Vepstas (linas@linas.org)
 
 This file is part of GNU CC.
 

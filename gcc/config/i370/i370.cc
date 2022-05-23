@@ -121,6 +121,8 @@ typedef struct label_node
   int label_last_ref;
 } label_node_t;
 
+struct i370_cc_flags cc_status;
+
 /* if we just inspected a label on another page, we want to
    record that */
 static int just_referenced_page = -1;
@@ -495,26 +497,22 @@ void i370_override_options(void)
 int i370_branch_dest(rtx branch)
 {
   rtx dest = SET_SRC(PATTERN(branch));
-  int dest_uid;
-  int dest_addr;
-
   /* first, compute the estimated address of the branch target */
   if (GET_CODE(dest) == IF_THEN_ELSE)
     dest = XEXP(dest, 1);
   dest = XEXP(dest, 0);
-  dest_uid = INSN_UID(dest);
-  dest_addr = INSN_ADDRESSES(dest_uid);
+  int dest_uid = INSN_UID(dest);
+  int dest_addr = INSN_ADDRESSES(dest_uid);
 
   /* next, record the address of this insn as the true addr of first ref */
   {
-    label_node_t *lp;
     rtx label = JUMP_LABEL(branch);
     int labelno = CODE_LABEL_NUMBER(label);
 
     if (!label || CODE_LABEL != GET_CODE(label))
-      abort();
+      gcc_unreachable();
 
-    lp = mvs_get_label(labelno);
+    label_node_t *lp = mvs_get_label(labelno);
     if (-1 == lp->first_ref_page)
       lp->first_ref_page = mvs_page_num;
     just_referenced_page = lp->label_page;
@@ -524,17 +522,14 @@ int i370_branch_dest(rtx branch)
 
 int i370_branch_length(rtx insn)
 {
-  int here, there;
-  here = INSN_ADDRESSES(INSN_UID(insn));
-  there = i370_branch_dest(insn);
+  int here = INSN_ADDRESSES(INSN_UID(insn));
+  int there = i370_branch_dest(insn);
   return (there - here);
 }
 
 int i370_short_branch(rtx insn)
 {
-  int base_offset;
-
-  base_offset = i370_branch_length(insn);
+  int base_offset = i370_branch_length(insn);
   /* If we just referenced something off-page, then you can
      forget about doing a short branch to it! So for backward
      references, we'll have a page number and can see that it is
@@ -574,26 +569,23 @@ int i370_short_branch(rtx insn)
    this code far more conservative than it needs to be.
  */
 
-#define I370_RECORD_LABEL_REF(label, addr)  \
-  {                                         \
-    label_node_t *lp;                       \
-    int labelno = CODE_LABEL_NUMBER(label); \
-    lp = mvs_get_label(labelno);            \
-    if (addr < lp->label_first_ref)         \
-      lp->label_first_ref = addr;           \
-    if (addr > lp->label_last_ref)          \
-      lp->label_last_ref = addr;            \
+#define I370_RECORD_LABEL_REF(label, addr)     \
+  {                                            \
+    int labelno = CODE_LABEL_NUMBER(label);    \
+    label_node_t *lp = mvs_get_label(labelno); \
+    if (addr < lp->label_first_ref)            \
+      lp->label_first_ref = addr;              \
+    if (addr > lp->label_last_ref)             \
+      lp->label_last_ref = addr;               \
   }
 
 static void
 i370_label_scan()
 {
-  rtx insn;
-  label_node_t *lp;
   int tablejump_offset = 0;
 
   /* MVS-TODO: Might not be correct to cast */
-  for (insn = get_insns(); insn; insn = NEXT_INSN(safe_as_a<rtx_insn *>(insn)))
+  for (rtx_insn *insn = get_insns(); insn; insn = NEXT_INSN(insn))
   {
     int here = INSN_ADDRESSES(INSN_UID(insn));
     enum rtx_code code = GET_CODE(insn);
@@ -608,19 +600,19 @@ i370_label_scan()
     {
       int labelno = CODE_LABEL_NUMBER(insn);
 
-      lp = mvs_get_label(labelno);
+      label_node_t *lp = mvs_get_label(labelno);
       lp->label_addr = here;
 #if 0
-           /* Supposedly, labels are supposed to have circular
-              lists of label-refs that reference them, 
-              setup in flow.c, but this does not appear to be the case.  */
-           rtx labelref = LABEL_REFS (insn);
-           rtx ref = labelref;
-           do 
-             {
-               rtx linsn = CONTAINING_INSN(ref);
-               ref =  LABEL_NEXTREF(ref);
-             } while (ref && (ref != labelref));
+      /* Supposedly, labels are supposed to have circular
+        lists of label-refs that reference them, 
+        setup in flow.c, but this does not appear to be the case.  */
+      rtx labelref = LABEL_REFS (insn);
+      rtx ref = labelref;
+      do 
+      {
+        rtx linsn = CONTAINING_INSN(ref);
+        ref =  LABEL_NEXTREF(ref);
+      } while (ref && (ref != labelref));
 #endif
     }
     else if (JUMP_INSN == code)
@@ -632,18 +624,17 @@ i370_label_scan()
          and there had better be a vector of labels.  */
       if (!label)
       {
-        int j;
         rtx body = PATTERN(insn);
         if (ADDR_VEC == GET_CODE(body))
         {
-          for (j = 0; j < XVECLEN(body, 0); j++)
+          for (int j = 0; j < XVECLEN(body, 0); j++)
           {
             rtx lref = XVECEXP(body, 0, j);
             if (LABEL_REF != GET_CODE(lref))
-              abort();
+              gcc_unreachable();
             label = XEXP(lref, 0);
             if (CODE_LABEL != GET_CODE(label))
-              abort();
+              gcc_unreachable();
             tablejump_offset += 4;
             here += 4;
             I370_RECORD_LABEL_REF(label, here);
@@ -670,7 +661,7 @@ i370_label_scan()
              last week, and so we punt for now.  */
 
           debug_rtx(insn);
-          for (j = 0; j < XVECLEN(body, 0); j++)
+          for (int j = 0; j < XVECLEN(body, 0); j++)
           {
           }
           /* finished with the vector go do next insn */
@@ -691,7 +682,7 @@ i370_label_scan()
 
           /* print_rtl_single (stdout, insn); */
           /* debug_rtx (insn); */
-          /* abort(); */
+          /* gcc_unreachable(); */
           continue;
         }
       }
@@ -700,7 +691,7 @@ i370_label_scan()
         /* At this point, this jump_insn had better be a plain-old
            ordinary one, grap the label id and go */
         if (CODE_LABEL != GET_CODE(label))
-          abort();
+          gcc_unreachable();
         I370_RECORD_LABEL_REF(label, here);
       }
     }
@@ -711,15 +702,14 @@ i370_label_scan()
     {
       if ('i' == GET_RTX_CLASS(code))
       {
-        rtx note;
-        for (note = REG_NOTES(insn); note; note = XEXP(note, 1))
+        for (rtx note = REG_NOTES(insn); note; note = XEXP(note, 1))
         {
           /* MVS-TODO: Ambigous */
           if (REG_LABEL_TARGET == REG_NOTE_KIND(note))
           {
             rtx label = XEXP(note, 0);
             if (!label || CODE_LABEL != GET_CODE(label))
-              abort();
+              gcc_unreachable();
 
             I370_RECORD_LABEL_REF(label, here);
           }
@@ -783,33 +773,6 @@ void check_label_emit()
 }
 #endif /* TARGET_HLASM */
 
-#ifdef TARGET_LINUX
-void check_label_emit()
-{
-  if (mvs_need_base_reload)
-  {
-    mvs_need_base_reload = 0;
-
-    if (i370_enable_pic)
-    {
-      mvs_page_code += 12;
-      fprintf(assembler_source, "\tL\tr3,0(,r13)\n");
-      fprintf(assembler_source, "\tL\tr%d,%d(,r3)\n",
-              PIC_BASE_REGISTER, ((mvs_page_num - function_base_page) * 8 + 4));
-      fprintf(assembler_source, "\tL\tr3,%d(,r3)\n",
-              (mvs_page_num - function_base_page) * 8);
-    }
-    else
-    {
-      mvs_page_code += 8;
-      fprintf(assembler_source, "\tL\tr3,0(,r13)\n");
-      fprintf(assembler_source, "\tL\tr3,%d(,r3)\n",
-              ((mvs_page_num - function_base_page) * 4));
-    }
-  }
-}
-#endif /* TARGET_LINUX */
-
 /* Add the label to the current page label list.  If a free element is available
    it will be used for the new label.  Otherwise, a label element will be
    allocated from memory.
@@ -847,7 +810,6 @@ mvs_get_label(int id)
   lp->label_addr = -1;
   lp->first_ref_page = -1;
   label_anchor = lp;
-
   return lp;
 }
 
@@ -1238,22 +1200,6 @@ int mvs_check_alias(const char *realname, char *aliasname)
 #endif /* TARGET_HLASM */
 
 /* ===================================================== */
-/* ===================================================== */
-/* defines and functions specific to the gas assembler */
-#ifdef TARGET_LINUX
-
-/* Check for C/370 runtime function, they don't use standard calling
-   conventions.  True is returned if the function is in the table.
-   NAME is the name of the current function.  */
-/* no special calling conventions (yet ??) */
-
-int mvs_function_check(const char *name ATTRIBUTE_UNUSED)
-{
-  return 0;
-}
-
-#endif /* TARGET_LINUX */
-/* ===================================================== */
 
 /* Some remarks about unsigned_jump_follows_p():
    gcc is built around the assumption that branches are signed
@@ -1275,86 +1221,92 @@ int mvs_function_check(const char *name ATTRIBUTE_UNUSED)
    is unsigned.  INSN is the current instruction. We err on the side
    of assuming unsigned, so there are a lot of return 1. */
 
-int unsigned_jump_follows_p(register rtx insn)
+int unsigned_jump_follows_p(rtx x)
 {
+  rtx_insn *insn = NULL;
+  bool first = true;
   while (1)
   {
-    register rtx tmp_insn;
-    enum rtx_code coda;
+    if (first)
+    {
+      insn = get_last_insn();
+      first = false;
+    }
+    else
+    {
+      gcc_assert(insn != NULL);
+      insn = NEXT_INSN(insn);
+    }
 
-    /* MVS-TODO: Might not be correct to cast */
-    insn = NEXT_INSN(safe_as_a<rtx_insn *>(insn));
-    if (!insn)
+    /* Exit out of the loop if no instruction is found */
+    if (insn == NULL)
       return (1);
 
     if (GET_CODE(insn) != JUMP_INSN)
       continue;
 
-    tmp_insn = PATTERN(insn);
-    if (!tmp_insn)
+    rtx tmp_insn = PATTERN(insn);
+    if (tmp_insn == NULL)
       continue;
-    if (GET_CODE(tmp_insn) != SET)
-      continue;
-
-    if (GET_CODE(XEXP(tmp_insn, 0)) != PC)
+    if (GET_CODE(tmp_insn) != SET || GET_CODE(XEXP(tmp_insn, 0)) != PC)
       continue;
 
     tmp_insn = XEXP(tmp_insn, 1);
     if (GET_CODE(tmp_insn) != IF_THEN_ELSE)
       continue;
+  }
 
-    /* if we got to here, this instruction is a jump.  Is it signed? */
-    tmp_insn = XEXP(tmp_insn, 0);
-    coda = GET_CODE(tmp_insn);
+  /* if we got to here, this instruction is a jump.  Is it signed? */
+  rtx tmp_insn = XEXP(tmp_insn, 0);
+  enum rtx_code coda = GET_CODE(tmp_insn);
 
-    /* if we get an equal or not equal, either comparison
-       will work. What we're really interested in what happens
-       after that. So check one more instruction to see if
-       anything comes up. */
+  /* if we get an equal or not equal, either comparison
+      will work. What we're really interested in what happens
+      after that. So check one more instruction to see if
+      anything comes up. */
+  if ((coda == EQ) || (coda == NE))
+  {
+    /* MVS-TODO: Might not be correct to cast */
+    insn = NEXT_INSN(insn);
+    if (!insn)
+      return (1);
 
-    if ((coda == EQ) || (coda == NE))
+    if (GET_CODE(insn) != JUMP_INSN)
     {
-      /* MVS-TODO: Might not be correct to cast */
-      insn = NEXT_INSN(safe_as_a<rtx_insn *>(insn));
-      if (!insn)
-        return (1);
-
-      if (GET_CODE(insn) != JUMP_INSN)
+      /* skip any labels or notes or non-branching
+          instructions, looking to see if there's a
+          branch ahead */
+      while (GET_CODE(insn) != JUMP_INSN)
       {
-        /* skip any labels or notes or non-branching
-           instructions, looking to see if there's a
-           branch ahead */
-        while (GET_CODE(insn) != JUMP_INSN)
-        {
-          if ((GET_CODE(insn) != CODE_LABEL) && (GET_CODE(insn) != NOTE) && (GET_CODE(insn) != INSN) && (GET_CODE(insn) != JUMP_INSN))
-            return (1);
-          /* MVS-TODO: Might not be correct to cast */
-          insn = NEXT_INSN(safe_as_a<rtx_insn *>(insn));
-          if (!insn)
-            return (1);
-        }
+        if ((GET_CODE(insn) != CODE_LABEL) && (GET_CODE(insn) != NOTE) && (GET_CODE(insn) != INSN) && (GET_CODE(insn) != JUMP_INSN))
+          return (1);
+        /* MVS-TODO: Might not be correct to cast */
+        insn = NEXT_INSN(insn);
+        if (!insn)
+          return (1);
       }
-
-      tmp_insn = PATTERN(insn);
-      if (!tmp_insn)
-        continue;
-      if (GET_CODE(tmp_insn) != SET)
-        return (1);
-
-      if (GET_CODE(XEXP(tmp_insn, 0)) != PC)
-        return (1);
-
-      tmp_insn = XEXP(tmp_insn, 1);
-      if (GET_CODE(tmp_insn) != IF_THEN_ELSE)
-        return (1);
-
-      tmp_insn = XEXP(tmp_insn, 0);
-      coda = GET_CODE(tmp_insn);
     }
 
-    /* if we got to here, this instruction is a jump.  Is it signed? */
-    return coda != GE && coda != GT && coda != LE && coda != LT;
+    tmp_insn = PATTERN(insn);
+    if (tmp_insn == NULL)
+      gcc_unreachable();
+
+    if (GET_CODE(tmp_insn) != SET)
+      return (1);
+
+    if (GET_CODE(XEXP(tmp_insn, 0)) != PC)
+      return (1);
+
+    tmp_insn = XEXP(tmp_insn, 1);
+    if (GET_CODE(tmp_insn) != IF_THEN_ELSE)
+      return (1);
+
+    tmp_insn = XEXP(tmp_insn, 0);
+    coda = GET_CODE(tmp_insn);
   }
+
+  /* if we got to here, this instruction is a jump.  Is it signed? */
+  return coda != GE && coda != GT && coda != LE && coda != LT;
 }
 
 #ifdef TARGET_HLASM
@@ -2165,9 +2117,6 @@ static bool
 i370_call_saved_register_used(tree call_expr)
 {
   CUMULATIVE_ARGS cum_v;
-  tree parameter;
-  rtx parm_rtx;
-
   INIT_CUMULATIVE_ARGS(cum_v, NULL, NULL, 0, 0);
   cumulative_args_t cum = pack_cumulative_args(&cum_v);
   for (int i = 0; i < call_expr_nargs(call_expr); i++)
@@ -2186,7 +2135,7 @@ i370_call_saved_register_used(tree call_expr)
     function_arg_info arg(TREE_TYPE(parameter), /*named=*/true);
     apply_pass_by_reference_rules(&cum_v, arg);
 
-    parm_rtx = i370_function_arg(cum, arg);
+    rtx parm_rtx = i370_function_arg(cum, arg);
 
     i370_function_arg_advance(cum, arg);
 
@@ -2301,23 +2250,191 @@ i370_function_value(const_tree ret_type, const_tree fn_decl_or_type,
 }
 
 /* Define platform dependent macros.  */
-void
-i370_cpu_cpp_builtins (cpp_reader *pfile)
+void i370_cpu_cpp_builtins(cpp_reader *pfile)
 {
-  cpp_define (pfile, "__i370__");
+  cpp_define(pfile, "__i370__");
   /* MVS-TODO: Define __MVS__, __VSE__, __CMS__, __MUSIC__, __PDOS__, __UDOS__, etc */
   struct cl_target_option opts;
-  cl_target_option_save (&opts, &global_options, &global_options_set);
+  cl_target_option_save(&opts, &global_options, &global_options_set);
+}
+
+void i370_print_operand(FILE *f, rtx xv, int code)
+{
+  switch (GET_CODE(xv))
+  {
+    static char curreg[4];
+  case REG:
+    if (code == 'N')
+      strcpy(curreg, reg_names[REGNO(xv) + 1]);
+    else
+      strcpy(curreg, reg_names[REGNO(xv)]);
+    fprintf(f, "%s", curreg);
+    break;
+  case MEM:
+  {
+    rtx addr = XEXP(xv, 0);
+    if (code == 'O')
+    {
+      if (GET_CODE(addr) == PLUS)
+        fprintf(f, "%d", INTVAL(XEXP(addr, 1)));
+      else
+        fprintf(f, "0");
+    }
+    else if (code == 'R')
+    {
+      if (GET_CODE(addr) == PLUS)
+        fprintf(f, "%s", reg_names[REGNO(XEXP(addr, 0))]);
+      else
+        fprintf(f, "%s", reg_names[REGNO(addr)]);
+    }
+    else
+      output_address(GET_MODE(xv), XEXP(xv, 0));
+  }
+  break;
+  case SYMBOL_REF:
+  case LABEL_REF:
+    mvs_page_lit += 4;
+    if (SYMBOL_REF_FLAG(xv))
+    {
+      fprintf(f, "=V(");
+      output_addr_const(f, xv);
+      fprintf(f, ")");
+      mvs_mark_alias(XSTR(xv, 0));
+    }
+    else
+    {
+      fprintf(f, "=A(");
+      output_addr_const(f, xv);
+      fprintf(f, ")");
+    }
+    break;
+  case CONST_INT:
+    if (code == 'B')
+      fprintf(f, "%d", INTVAL(xv) & 0xff);
+    else if (code == 'X')
+      fprintf(f, "%02X", INTVAL(xv) & 0xff);
+    else if (code == 'h')
+      fprintf(f, "%d", (INTVAL(xv) << 16) >> 16);
+    else if (code == 'H')
+    {
+      mvs_page_lit += 2;
+      fprintf(f, "=H'%d'", (INTVAL(xv) << 16) >> 16);
+    }
+    else if (code == 'K')
+    {
+      /* auto sign-extension of signed 16-bit to signed 32-bit */
+      mvs_page_lit += 4;
+      fprintf(f, "=F'%d'", (INTVAL(xv) << 16) >> 16);
+    }
+    else if (code == 'W')
+    {
+      /* hand-built sign-extension of signed 32-bit to 64-bit */
+      mvs_page_lit += 8;
+      if (0 <= INTVAL(xv))
+      {
+        fprintf(f, "=XL8'00000000");
+      }
+      else
+      {
+        fprintf(f, "=XL8'FFFFFFFF");
+      }
+      fprintf(f, "%08X'", INTVAL(xv));
+    }
+    else
+    {
+      mvs_page_lit += 4;
+      fprintf(f, "=F'%d'", INTVAL(xv));
+    }
+    break;
+  case CONST_DOUBLE:
+    if (GET_MODE(xv) == DImode)
+    {
+      if (code == 'M')
+      {
+        mvs_page_lit += 4;
+        fprintf(f, "=XL4'%08X'", CONST_DOUBLE_LOW(xv));
+      }
+      else if (code == 'L')
+      {
+        mvs_page_lit += 4;
+        fprintf(f, "=XL4'%08X'", CONST_DOUBLE_HIGH(xv));
+      }
+      else
+      {
+        mvs_page_lit += 8;
+        fprintf(f, "=XL8'%08X%08X'", CONST_DOUBLE_LOW(xv),
+                CONST_DOUBLE_HIGH(xv));
+      }
+    }
+    else
+    {
+      if (GET_MODE(xv) == SFmode)
+      {
+        /*REAL_VALUE_TYPE rval;
+        REAL_VALUE_FROM_CONST_DOUBLE(rval, xv);*/
+        mvs_page_lit += 4;
+        /*fprintf (f, "=E'%s'", mvs_make_float(rval));*/
+      }
+      else if (GET_MODE(xv) == DFmode)
+      {
+        /*REAL_VALUE_TYPE rval;
+        REAL_VALUE_FROM_CONST_DOUBLE(rval, xv);*/
+        mvs_page_lit += 8;
+        /*fprintf (f, "=D'%s'", mvs_make_float(rval));*/
+      }
+      else
+      {
+        mvs_page_lit += 8;
+        fprintf(f, "=XL8'%08X%08X'",
+                CONST_DOUBLE_HIGH(xv), CONST_DOUBLE_LOW(xv));
+      }
+    }
+    break;
+  case CONST:
+    if (GET_CODE(XEXP(xv, 0)) == PLUS && GET_CODE(XEXP(XEXP(xv, 0), 0)) == SYMBOL_REF)
+    {
+      mvs_page_lit += 4;
+      if (SYMBOL_REF_FLAG(XEXP(XEXP(xv, 0), 0)))
+      {
+        int xx = INTVAL(XEXP(XEXP(xv, 0), 1));
+        fprintf(f, "=V(");
+        ASM_OUTPUT_LABELREF(f,
+                            XSTR(XEXP(XEXP(xv, 0), 0), 0));
+        if ((unsigned)xx < 4096)
+          fprintf(f, ")\n\tLA\t%s,%d(0,%s)", curreg,
+                  xx,
+                  curreg);
+        else
+          fprintf(f, ")\n\tA\t%s,=F'%d'", curreg,
+                  xx);
+        mvs_mark_alias(XSTR(XEXP(XEXP(xv, 0), 0), 0));
+      }
+      else
+      {
+        fprintf(f, "=A(");
+        output_addr_const(f, xv);
+        fprintf(f, ")");
+      }
+    }
+    else
+    {
+      mvs_page_lit += 4;
+      fprintf(f, "=F'");
+      output_addr_const(f, xv);
+      fprintf(f, "'");
+    }
+    break;
+  default:
+    gcc_unreachable();
+  }
 }
 
 #undef TARGET_LIBCALL_VALUE
 #define TARGET_LIBCALL_VALUE i370_libcall_value
 #undef TARGET_PASS_BY_REFERENCE
 #define TARGET_PASS_BY_REFERENCE i370_pass_by_reference
-/*
 #undef TARGET_FUNCTION_OK_FOR_SIBCALL
 #define TARGET_FUNCTION_OK_FOR_SIBCALL i370_function_ok_for_sibcall
-*/
 #undef TARGET_FUNCTION_ARG
 #define TARGET_FUNCTION_ARG i370_function_arg
 #undef TARGET_FUNCTION_ARG_ADVANCE
