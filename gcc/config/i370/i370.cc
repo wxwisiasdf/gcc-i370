@@ -1463,7 +1463,7 @@ i370_output_function_prologue(FILE *f)
   char ch = '@';
   for (char *bp = temp; *bp; bp++)
     *bp = (*bp == '_' ? ch : TOUPPER(*bp));
-  fprintf(f, "%-8sEQU *", temp);
+  fprintf(f, "%-8sEQU *\n", temp);
 
   fprintf(f, "\tB\t@@FEN%i\n", mvs_page_num);
 #ifdef TARGET_DIGNUS
