@@ -292,118 +292,6 @@ extern void mvs_mark_alias(const char *);
 
 #define FIRST_PSEUDO_REGISTER 54
 
-/* Define base and page registers.  */
-
-#define BASE_REGISTER 3
-#define PAGE_REGISTER 4
-#define PIC_BASE_REGISTER 12
-
-/* Return number of consecutive hard regs needed starting at reg REGNO
-   to hold something of mode MODE.
-   This is ordinarily the length in words of a value of mode MODE
-   but can be less for certain modes in special long registers.
-   Note that DCmode (complex double) needs two regs.  */
-
-/*
-#define HARD_REGNO_NREGS(REGNO, MODE) 					\
-  ((REGNO) > 15 ? 							\
-   ((GET_MODE_SIZE (MODE) + 2*UNITS_PER_WORD - 1) / (2*UNITS_PER_WORD)) :	\
-   (GET_MODE_SIZE(MODE)+UNITS_PER_WORD-1) / UNITS_PER_WORD)
-*/
-
-/* Value is 1 if hard register REGNO can hold a value of machine-mode MODE.
-   On the 370, the cpu registers can hold QI, HI, SI, SF and DF.  The
-   even registers can hold DI.  The floating point registers can hold
-   either SF, DF, SC or DC.  */
-
-/*
-#define HARD_REGNO_MODE_OK(REGNO, MODE)					\
-  ((REGNO) < 16 ? (((REGNO) & 1) == 0 || 				\
-      (((MODE) != DImode) && ((MODE) != DFmode)))		\
-    : ((MODE) == SFmode || (MODE) == DFmode) ||		\
-                   (MODE) == SCmode || (MODE) == DCmode)
-*/
-
-/* Value is 1 if it is a good idea to tie two pseudo registers when one has
-   mode MODE1 and one has mode MODE2.
-   If HARD_REGNO_MODE_OK could produce different values for MODE1 and MODE2,
-   for any hard reg, then this must be 0 for correct output.  */
-
-/*
-#define MODES_TIEABLE_P(MODE1, MODE2)					\
-  (((MODE1) == SFmode || (MODE1) == DFmode)				\
-   == ((MODE2) == SFmode || (MODE2) == DFmode))
-*/
-
-/* Mark external references.  */
-
-/*
-#define ENCODE_SECTION_INFO(decl)  					\
-  if (DECL_EXTERNAL (decl) && TREE_PUBLIC (decl)) 			\
-    SYMBOL_REF_FLAG (XEXP (DECL_RTL (decl), 0)) = 1;
-*/
-
-/* Specify the registers used for certain standard purposes.
-   The values of these macros are register numbers.  */
-
-/* 370 PC isn't overloaded on a register.  */
-
-/* #define PC_REGNUM */
-
-/* ------------------------------------------------------------------- */
-/* ================= */
-#ifdef TARGET_HLASM
-
-/* Register to use for pushing function arguments.  */
-#define STACK_POINTER_REGNUM 13
-
-/* Base register for access to local variables of the function.  */
-#define FRAME_POINTER_REGNUM 13
-#define HARD_FRAME_POINTER_REGNUM FRAME_POINTER_REGNUM
-
-/* Base register for access to arguments of the function.  */
-#define ARG_POINTER_REGNUM 11
-
-/* Register for return address */
-#define RETURN_ADDRESS_POINTER_REGNUM 14
-
-#endif /* TARGET_HLASM */
-
-/* ================= */
-/* ------------------------------------------------------------------- */
-
-/* R10 is register in which static-chain is passed to a function.
-   Static-chaining is done when a nested function references as a global
-   a stack variable of its parent: e.g.
-        int parent_func (int arg) {
-             int x;                            // x is in parents stack
-             void child_func (void) { x++: }   // child references x as global var
-             ...
-        }
- */
-
-#define STATIC_CHAIN_REGNUM 10
-
-/* R1 is register in which address to store a structure value is passed to
-   a function.  This is used only when returning 64-bit long-long in a 32-bit arch
-   and when calling functions that return structs by value. e.g.
-        typedef struct A_s { int a,b,c; } A_t;
-        A_t fun_returns_value (void) {
-            A_t a; a.a=1; a.b=2 a.c=3;
-            return a;
-        }
-   In the above, the storage for the return value is in the callers stack, and
-   the R1 points at that mem location.
- */
-
-/*
-#ifdef TARGET_PDPMAC
-#define STRUCT_VALUE_REGNUM 0
-#else
-#define STRUCT_VALUE_REGNUM 1
-#endif
-*/
-
 /* Define the classes of registers for register constraints in the
    machine description.  Also define ranges of constants.
 
@@ -694,8 +582,8 @@ enum reg_class
         {FRAME_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM},          \
         {ARG_POINTER_REGNUM, STACK_POINTER_REGNUM},                 \
         {ARG_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM},            \
-        {RETURN_ADDRESS_POINTER_REGNUM, STACK_POINTER_REGNUM},      \
-        {RETURN_ADDRESS_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM}, \
+        {RETURN_ADDRESS_REGNUM, STACK_POINTER_REGNUM},      \
+        {RETURN_ADDRESS_REGNUM, HARD_FRAME_POINTER_REGNUM}, \
     {                                                               \
       BASE_REGNUM, BASE_REGNUM                                      \
     }                                                               \
@@ -727,9 +615,9 @@ enum reg_class
   (plus_constant(Pmode, arg_pointer_rtx, -STACK_POINTER_OFFSET))
 
 /* The return address of the current frame is retrieved
-   from the initial value of register RETURN_REGNUM.
+   from the initial value of register RETURN_ADDRESS_REGNUM.
    For frames farther back, we use the stack slot where
-   the corresponding RETURN_REGNUM register was saved.  */
+   the corresponding RETURN_ADDRESS_REGNUM register was saved.  */
 #define DYNAMIC_CHAIN_ADDRESS(FRAME) \
   (1 ? plus_constant(Pmode, (FRAME), STACK_POINTER_OFFSET - UNITS_PER_LONG) : (FRAME))
 

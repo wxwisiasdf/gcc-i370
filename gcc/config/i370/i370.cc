@@ -440,20 +440,11 @@ void i370_asm_globalize_label(FILE *f, const char *name)
 
 void i370_asm_label_ref(FILE *f, const char *name)
 {
-  char *bp, ch, temp[MAX_MVS_LABEL_SIZE + 1];
+  char temp[MAX_MVS_LABEL_SIZE + 1];
   if (!mvs_get_alias(name, temp))
     strcpy(temp, name);
-  ch = '@';
-  for (bp = temp; *bp; bp++)
-    *bp = (*bp == '_' ? ch : TOUPPER(*bp));
-  fprintf(f, "%s", temp);
-  if (!strcmp(temp, "main"))
-    strcpy(temp, "gccmain");
-  if (mvs_function_check(temp))
-    ch = '#';
-  else
-    ch = '@';
-  for (bp = temp; *bp; bp++)
+  char ch = '@';
+  for (char *bp = temp; *bp; bp++)
     *bp = (*bp == '_' ? ch : TOUPPER(*bp));
   fprintf(f, "%s", temp);
 }
@@ -747,7 +738,7 @@ i370_label_scan()
      .long .LPOOL1
 
   Note that the functin prologue loads the page addressing register:
-      L       PAGE_REGISTER,=A(.LPGT0)
+      L       PAGE_REGNUM,=A(.LPGT0)
 
   The ELF version then stores this value at 0(r13), so that its always
   accessible. This frees up r4 for general register allocation; whereas
@@ -766,9 +757,7 @@ void check_label_emit()
   {
     mvs_need_base_reload = 0;
     mvs_page_code += 4;
-    fprintf(assembler_source, "\tL\t%i,%i(,%i)\n",
-            BASE_REGISTER, (mvs_page_num - function_base_page) * 4,
-            PAGE_REGISTER);
+    fprintf(assembler_source, "\tL\t%i,%i(,%i)\n", BASE_REGNUM, (mvs_page_num - function_base_page) * 4, PAGE_REGNUM);
   }
 }
 #endif /* TARGET_HLASM */
@@ -944,10 +933,10 @@ int mvs_check_page(void *_file, int code, int lit)
     }
     fprintf(assembler_source, "\tDS\t0F\n");
     fprintf(assembler_source, "@@PGE%i\tEQU\t*\n", mvs_page_num);
-    fprintf(assembler_source, "\tDROP\t%i\n", BASE_REGISTER);
+    fprintf(assembler_source, "\tDROP\t%i\n", BASE_REGNUM);
     mvs_page_num++;
-    fprintf(assembler_source, "\tBALR\t%i,0\n", BASE_REGISTER);
-    fprintf(assembler_source, "\tUSING\t*,%i\n", BASE_REGISTER);
+    fprintf(assembler_source, "\tBALR\t%i,0\n", BASE_REGNUM);
+    fprintf(assembler_source, "\tUSING\t*,%i\n", BASE_REGNUM);
     fprintf(assembler_source, "@@PG%i\tEQU\t*\n", mvs_page_num);
     mvs_page_code = code;
     mvs_page_lit = lit;
@@ -1104,13 +1093,22 @@ int mvs_dump_alias(FILE *f)
   return 0;
 }
 
+/* https://stackoverflow.com/questions/2624192/good-hash-function-for-strings */
+int mvs_hash_alias(const char *realname)
+{
+  size_t len = strlen(realname);
+  int hash = 7;
+  for (int i = 0; i < len; i++)
+    hash = hash * 31 + realname[i];
+  return hash;
+}
+
 /* Get the alias from the list.
    If 1 is returned then it's in the alias list, 0 if it was not */
 
 int mvs_get_alias(const char *realname, char *aliasname)
 {
 #ifdef TARGET_ALIASES
-
   for (alias_node_t *ap = alias_anchor; ap; ap = ap->alias_next)
   {
     if (!strcmp(ap->real_name, realname))
@@ -1141,8 +1139,11 @@ int mvs_get_alias(const char *realname, char *aliasname)
 #else
   if (strlen(realname) > MAX_MVS_LABEL_SIZE)
   {
+    size_t len = strlen(realname);
+    if(len >= MAX_MVS_LABEL_SIZE)
+      len = MAX_MVS_LABEL_SIZE;
     strncpy(aliasname, realname, MAX_MVS_LABEL_SIZE);
-    aliasname[MAX_MVS_LABEL_SIZE] = '\0';
+    aliasname[len] = '\0';
     return 1;
   }
 #endif
@@ -1155,7 +1156,6 @@ int mvs_get_alias(const char *realname, char *aliasname)
 int mvs_check_alias(const char *realname, char *aliasname)
 {
 #ifdef TARGET_ALIASES
-
   for (alias_node_t *ap = alias_anchor; ap; ap = ap->alias_next)
   {
     if (!strcmp(ap->real_name, realname))
@@ -1189,8 +1189,11 @@ int mvs_check_alias(const char *realname, char *aliasname)
 #else
   if (strlen(realname) > MAX_MVS_LABEL_SIZE)
   {
+    size_t len = strlen(realname);
+    if(len >= MAX_MVS_LABEL_SIZE)
+      len = MAX_MVS_LABEL_SIZE;
     strncpy(aliasname, realname, MAX_MVS_LABEL_SIZE);
-    aliasname[MAX_MVS_LABEL_SIZE] = '\0';
+    aliasname[len] = '\0';
     return 1;
   }
 #endif
@@ -1337,7 +1340,7 @@ i370_hlasm_assemble_integer(rtx x, unsigned int size, int aligned_p)
       if (GET_CODE(x) == CONST_INT)
       {
         fputs("\tDC\tF'", asm_out_file);
-        output_addr_const(asm_out_file, XVECEXP (x, 0, 0));
+        output_addr_const(asm_out_file, x);
         fputs("'\n", asm_out_file);
       }
       else
@@ -1381,7 +1384,7 @@ i370_hlasm_assemble_integer(rtx x, unsigned int size, int aligned_p)
         {
           fputs("\tDC\tA(", asm_out_file);
         }
-        output_addr_const(asm_out_file, XVECEXP (x, 0, 0));
+        output_addr_const(asm_out_file, x);
         fputs(")\n", asm_out_file);
       }
       return true;
@@ -1451,8 +1454,17 @@ i370_output_function_prologue(FILE *f)
 
   if (eprol_macname != NULL)
   {
-    fprintf(f, "\t%s CINDEX=%i,FRAME=%ld,BASER=%i,ENTRY=%s\n", eprol_macname, mvs_page_num, frame_usage, BASE_REGISTER, mvs_need_entry ? "YES" : "NO");
+    fprintf(f, "\t%s CINDEX=%i,FRAME=%ld,BASER=%i,ENTRY=%s\n", eprol_macname, mvs_page_num, frame_usage, BASE_REGNUM, mvs_need_entry ? "YES" : "NO");
   }
+
+  char temp[MAX_MVS_LABEL_SIZE + 1];
+  if (!mvs_get_alias(mvs_function_name, temp))
+    strcpy(temp, mvs_function_name);
+  char ch = '@';
+  for (char *bp = temp; *bp; bp++)
+    *bp = (*bp == '_' ? ch : TOUPPER(*bp));
+  fprintf(f, "%-8sEQU *", temp);
+
   fprintf(f, "\tB\t@@FEN%i\n", mvs_page_num);
 #ifdef TARGET_DIGNUS
   fprintf(f, "@FRAMESIZE_%i DC F'%i'\n",
@@ -1463,15 +1475,15 @@ i370_output_function_prologue(FILE *f)
   fprintf(f, "\tLTORG\n");
 #endif
   fprintf(f, "@@FEN%i\tEQU\t*\n", mvs_page_num);
-  fprintf(f, "\tDROP\t%i\n", BASE_REGISTER);
-  fprintf(f, "\tBALR\t%i,0\n", BASE_REGISTER);
-  fprintf(f, "\tUSING\t*,%i\n", BASE_REGISTER);
+  fprintf(f, "\tDROP\t%i\n", BASE_REGNUM);
+  fprintf(f, "\tBALR\t%i,0\n", BASE_REGNUM);
+  fprintf(f, "\tUSING\t*,%i\n", BASE_REGNUM);
 #endif
 #ifdef TARGET_LE
   assemble_name(f, mvs_function_name);
   fprintf(f, "\tEDCPRLG USRDSAL=%i,BASEREG=%i\n",
           STACK_FRAME_BASE + l,
-          BASE_REGISTER);
+          BASE_REGNUM);
 #endif
 
 #else /* TARGET_MACROS != 1 */
@@ -1547,8 +1559,8 @@ i370_output_function_prologue(FILE *f)
     fprintf(f, "\tST\t13,4(,2)\n ");
     fprintf(f, "\tLR\t13,2\n");
     fprintf(f, "\tDROP\t15\n");
-    fprintf(f, "\tBALR\t%i,0\n", BASE_REGISTER);
-    fprintf(f, "\tUSING\t*,%i\n", BASE_REGISTER);
+    fprintf(f, "\tBALR\t%i,0\n", BASE_REGNUM);
+    fprintf(f, "\tUSING\t*,%i\n", BASE_REGNUM);
     function_first = 1;
     function_label_index++;
   }
@@ -1557,7 +1569,7 @@ i370_output_function_prologue(FILE *f)
 #endif /* TARGET_MACROS */
   fprintf(f, "@@PG%i\tEQU\t*\n", mvs_page_num);
   fprintf(f, "\tLR\t11,1\n");
-  fprintf(f, "\tL\t%i,=A(@@PGT%i)\n", PAGE_REGISTER, mvs_page_num);
+  fprintf(f, "\tL\t%i,=A(@@PGT%i)\n", PAGE_REGNUM, mvs_page_num);
   fprintf(f, "* Function %s code\n", CURRFUNC);
 
   mvs_free_label_list();
@@ -1596,22 +1608,19 @@ void i370_output_function_epilogue(FILE *file)
 #endif
 #ifdef TARGET_LE
   fprintf(file, "\tEDCEPIL\n");
-  fprintf(file, "\tDROP\t%i\n", BASE_REGISTER);
+  fprintf(file, "\tDROP\t%i\n", BASE_REGNUM);
 #endif
-
 #else /* !TARGET_MACROS */
-
 #ifdef TARGET_LE
   fprintf(file, "\tL\t13,4(,13)\n");
   fprintf(file, "\tL\t14,12(,13)\n");
   fprintf(file, "\tLM\t2,12,28(13)\n");
   fprintf(file, "\tBALR\t1,14\n");
-  fprintf(file, "\tDROP\t%i\n", BASE_REGISTER);
+  fprintf(file, "\tDROP\t%i\n", BASE_REGNUM);
   fprintf(file, "\tDC\tA(");
   assemble_name(file, mvs_function_name);
   fprintf(file, ")\n");
 #endif
-
 #endif /* TARGET_MACROS */
 
   fprintf(file, "* Function %s literal pool\n", CURRFUNC);
@@ -2258,6 +2267,18 @@ void i370_cpu_cpp_builtins(cpp_reader *pfile)
   cl_target_option_save(&opts, &global_options, &global_options_set);
 }
 
+/* Convert a float to a printable form.  */
+static char *
+mvs_make_float(const REAL_VALUE_TYPE* r)
+{
+  static char buf[50];
+  long int f;
+  /* MVS-TODO: Fix floats */
+  REAL_VALUE_TO_TARGET_LONG_DOUBLE(*r, &f);
+  snprintf(buf, sizeof buf, "%.4lf", (long double)f);
+  return (buf);
+}
+
 void i370_print_operand(FILE *f, rtx xv, int code)
 {
   switch (GET_CODE(xv))
@@ -2297,14 +2318,14 @@ void i370_print_operand(FILE *f, rtx xv, int code)
     if (SYMBOL_REF_FLAG(xv))
     {
       fprintf(f, "=V(");
-      output_addr_const(f, XVECEXP (xv, 0, 0));
+      i370_asm_label_ref(f, XSTR(xv, 0));
       fprintf(f, ")");
       mvs_mark_alias(XSTR(xv, 0));
     }
     else
     {
       fprintf(f, "=A(");
-      output_addr_const(f, XVECEXP (xv, 0, 0));
+      i370_asm_label_ref(f, XSTR(xv, 0));
       fprintf(f, ")");
     }
     break;
@@ -2370,17 +2391,15 @@ void i370_print_operand(FILE *f, rtx xv, int code)
     {
       if (GET_MODE(xv) == SFmode)
       {
-        /*REAL_VALUE_TYPE rval;
-        REAL_VALUE_FROM_CONST_DOUBLE(rval, xv);*/
+        const REAL_VALUE_TYPE* rval = CONST_DOUBLE_REAL_VALUE(xv);
         mvs_page_lit += 4;
-        /*fprintf (f, "=E'%s'", mvs_make_float(rval));*/
+        fprintf(f, "=E'%s'", mvs_make_float(rval));
       }
       else if (GET_MODE(xv) == DFmode)
       {
-        /*REAL_VALUE_TYPE rval;
-        REAL_VALUE_FROM_CONST_DOUBLE(rval, xv);*/
+        const REAL_VALUE_TYPE* rval = CONST_DOUBLE_REAL_VALUE(xv);
         mvs_page_lit += 8;
-        /*fprintf (f, "=D'%s'", mvs_make_float(rval));*/
+        fprintf(f, "=D'%s'", mvs_make_float(rval));
       }
       else
       {
@@ -2401,18 +2420,15 @@ void i370_print_operand(FILE *f, rtx xv, int code)
         ASM_OUTPUT_LABELREF(f,
                             XSTR(XEXP(XEXP(xv, 0), 0), 0));
         if ((unsigned)xx < 4096)
-          fprintf(f, ")\n\tLA\t%s,%i(0,%s)", curreg,
-                  xx,
-                  curreg);
+          fprintf(f, ")\n\tLA\t%s,%i(0,%s)", curreg, xx, curreg);
         else
-          fprintf(f, ")\n\tA\t%s,=F'%i'", curreg,
-                  xx);
+          fprintf(f, ")\n\tA\t%s,=F'%i'", curreg, xx);
         mvs_mark_alias(XSTR(XEXP(XEXP(xv, 0), 0), 0));
       }
       else
       {
         fprintf(f, "=A(");
-        output_addr_const(f, XVECEXP (xv, 0, 0));
+        i370_asm_label_ref(f, XSTR(xv, 0));
         fprintf(f, ")");
       }
     }
@@ -2420,7 +2436,7 @@ void i370_print_operand(FILE *f, rtx xv, int code)
     {
       mvs_page_lit += 4;
       fprintf(f, "=F'");
-      output_addr_const(f, XVECEXP (xv, 0, 0));
+      output_addr_const(f, xv);
       fprintf(f, "'");
     }
     break;
