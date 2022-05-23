@@ -766,7 +766,7 @@ void check_label_emit()
   {
     mvs_need_base_reload = 0;
     mvs_page_code += 4;
-    fprintf(assembler_source, "\tL\t%d,%d(,%d)\n",
+    fprintf(assembler_source, "\tL\t%i,%i(,%i)\n",
             BASE_REGISTER, (mvs_page_num - function_base_page) * 4,
             PAGE_REGISTER);
   }
@@ -938,17 +938,17 @@ int mvs_check_page(void *_file, int code, int lit)
  dumped prior to the jump table generation. */
     if (mvs_case_code == 0)
     {
-      fprintf(assembler_source, "\tB\t@@PGE%d\n", mvs_page_num);
+      fprintf(assembler_source, "\tB\t@@PGE%i\n", mvs_page_num);
       fprintf(assembler_source, "\tDS\t0F\n");
       fprintf(assembler_source, "\tLTORG\n");
     }
     fprintf(assembler_source, "\tDS\t0F\n");
-    fprintf(assembler_source, "@@PGE%d\tEQU\t*\n", mvs_page_num);
-    fprintf(assembler_source, "\tDROP\t%d\n", BASE_REGISTER);
+    fprintf(assembler_source, "@@PGE%i\tEQU\t*\n", mvs_page_num);
+    fprintf(assembler_source, "\tDROP\t%i\n", BASE_REGISTER);
     mvs_page_num++;
-    fprintf(assembler_source, "\tBALR\t%d,0\n", BASE_REGISTER);
-    fprintf(assembler_source, "\tUSING\t*,%d\n", BASE_REGISTER);
-    fprintf(assembler_source, "@@PG%d\tEQU\t*\n", mvs_page_num);
+    fprintf(assembler_source, "\tBALR\t%i,0\n", BASE_REGISTER);
+    fprintf(assembler_source, "\tUSING\t*,%i\n", BASE_REGISTER);
+    fprintf(assembler_source, "@@PG%i\tEQU\t*\n", mvs_page_num);
     mvs_page_code = code;
     mvs_page_lit = lit;
     return 1;
@@ -1337,7 +1337,7 @@ i370_hlasm_assemble_integer(rtx x, unsigned int size, int aligned_p)
       if (GET_CODE(x) == CONST_INT)
       {
         fputs("\tDC\tF'", asm_out_file);
-        output_addr_const(asm_out_file, x);
+        output_addr_const(asm_out_file, XVECEXP (x, 0, 0));
         fputs("'\n", asm_out_file);
       }
       else
@@ -1381,7 +1381,7 @@ i370_hlasm_assemble_integer(rtx x, unsigned int size, int aligned_p)
         {
           fputs("\tDC\tA(", asm_out_file);
         }
-        output_addr_const(asm_out_file, x);
+        output_addr_const(asm_out_file, XVECEXP (x, 0, 0));
         fputs(")\n", asm_out_file);
       }
       return true;
@@ -1420,7 +1420,7 @@ i370_output_function_prologue(FILE *f)
           mvs_need_entry ? 'X' : 'S',
           CURRFUNC);
 #else
-  fprintf(f, "* Function %s prologue: stack = %d, args = %d\n",
+  fprintf(f, "* Function %s prologue: stack = %i, args = %i\n",
           mvs_function_name,
           frame_usage,
           current_function_static_stack_size);
@@ -1451,25 +1451,25 @@ i370_output_function_prologue(FILE *f)
 
   if (eprol_macname != NULL)
   {
-    fprintf(f, "\t%s CINDEX=%d,FRAME=%ld,BASER=%d,ENTRY=%s\n", eprol_macname, mvs_page_num, frame_usage, BASE_REGISTER, mvs_need_entry ? "YES" : "NO");
+    fprintf(f, "\t%s CINDEX=%i,FRAME=%ld,BASER=%i,ENTRY=%s\n", eprol_macname, mvs_page_num, frame_usage, BASE_REGISTER, mvs_need_entry ? "YES" : "NO");
   }
-  fprintf(f, "\tB\t@@FEN%d\n", mvs_page_num);
+  fprintf(f, "\tB\t@@FEN%i\n", mvs_page_num);
 #ifdef TARGET_DIGNUS
-  fprintf(f, "@FRAMESIZE_%d DC F'%d'\n",
+  fprintf(f, "@FRAMESIZE_%i DC F'%i'\n",
           mvs_page_num,
           frame_usage);
 #endif
 #ifdef TARGET_PDPMAC
   fprintf(f, "\tLTORG\n");
 #endif
-  fprintf(f, "@@FEN%d\tEQU\t*\n", mvs_page_num);
-  fprintf(f, "\tDROP\t%d\n", BASE_REGISTER);
-  fprintf(f, "\tBALR\t%d,0\n", BASE_REGISTER);
-  fprintf(f, "\tUSING\t*,%d\n", BASE_REGISTER);
+  fprintf(f, "@@FEN%i\tEQU\t*\n", mvs_page_num);
+  fprintf(f, "\tDROP\t%i\n", BASE_REGISTER);
+  fprintf(f, "\tBALR\t%i,0\n", BASE_REGISTER);
+  fprintf(f, "\tUSING\t*,%i\n", BASE_REGISTER);
 #endif
 #ifdef TARGET_LE
   assemble_name(f, mvs_function_name);
-  fprintf(f, "\tEDCPRLG USRDSAL=%d,BASEREG=%d\n",
+  fprintf(f, "\tEDCPRLG USRDSAL=%i,BASEREG=%i\n",
           STACK_FRAME_BASE + l,
           BASE_REGISTER);
 #endif
@@ -1497,7 +1497,7 @@ i370_output_function_prologue(FILE *f)
     }
     fprintf(f, "FDSE%03d\tDSECT\n", function_label_index);
     fprintf(f, "\tDS\tD\n");
-    fprintf(f, "\tDS\tCL(%d)\n", STACK_POINTER_OFFSET + l + current_function_outgoing_args_size);
+    fprintf(f, "\tDS\tCL(%i)\n", STACK_POINTER_OFFSET + l + current_function_outgoing_args_size);
     fprintf(f, "\tORG\tFDSE%03d\n", function_label_index);
     fprintf(f, "\tDS\tCL(120+8)\n");
     fprintf(f, "\tORG\n");
@@ -1519,7 +1519,7 @@ i370_output_function_prologue(FILE *f)
     fprintf(f, "\tDC\tAL4(0)\n");
     fprintf(f, "\tDC\tAL4(FDSL%03d)\n", function_label_index);
     fprintf(f, "FNAM%03d\tEQU\t*\n", function_label_index);
-    fprintf(f, "\tDC\tAL2(%d),C'%s'\n", strlen(mvs_function_name),
+    fprintf(f, "\tDC\tAL2(%i),C'%s'\n", strlen(mvs_function_name),
             mvs_function_name);
     fprintf(f, "FPPA%03d\tDS\t0F\n", function_label_index);
     fprintf(f, "\tDC\tX'03',X'00',X'33',X'00'\n");
@@ -1527,7 +1527,7 @@ i370_output_function_prologue(FILE *f)
     fprintf(f, "\tDC\tAL4(0)\n");
     fprintf(f, "\tDC\tAL4(FTIM%03d)\n", function_label_index);
     fprintf(f, "FTIM%03d\tDS\t0F\n", function_label_index);
-    fprintf(f, "\tDC\tCL4'%d',CL4'%02d%02d',CL6'%02d%02d00'\n",
+    fprintf(f, "\tDC\tCL4'%i',CL4'%02d%02d',CL6'%02d%02d00'\n",
             function_year, function_month, function_day,
             function_hour, function_minute);
     fprintf(f, "\tDC\tCL2'01',CL4'0100'\n");
@@ -1547,17 +1547,17 @@ i370_output_function_prologue(FILE *f)
     fprintf(f, "\tST\t13,4(,2)\n ");
     fprintf(f, "\tLR\t13,2\n");
     fprintf(f, "\tDROP\t15\n");
-    fprintf(f, "\tBALR\t%d,0\n", BASE_REGISTER);
-    fprintf(f, "\tUSING\t*,%d\n", BASE_REGISTER);
+    fprintf(f, "\tBALR\t%i,0\n", BASE_REGISTER);
+    fprintf(f, "\tUSING\t*,%i\n", BASE_REGISTER);
     function_first = 1;
     function_label_index++;
   }
 #endif /* TARGET_LE */
 
 #endif /* TARGET_MACROS */
-  fprintf(f, "@@PG%d\tEQU\t*\n", mvs_page_num);
+  fprintf(f, "@@PG%i\tEQU\t*\n", mvs_page_num);
   fprintf(f, "\tLR\t11,1\n");
-  fprintf(f, "\tL\t%d,=A(@@PGT%d)\n", PAGE_REGISTER, mvs_page_num);
+  fprintf(f, "\tL\t%i,=A(@@PGT%i)\n", PAGE_REGISTER, mvs_page_num);
   fprintf(f, "* Function %s code\n", CURRFUNC);
 
   mvs_free_label_list();
@@ -2276,7 +2276,7 @@ void i370_print_operand(FILE *f, rtx xv, int code)
     if (code == 'O')
     {
       if (GET_CODE(addr) == PLUS)
-        fprintf(f, "%d", INTVAL(XEXP(addr, 1)));
+        fprintf(f, "%i", INTVAL(XEXP(addr, 1)));
       else
         fprintf(f, "0");
     }
@@ -2297,34 +2297,34 @@ void i370_print_operand(FILE *f, rtx xv, int code)
     if (SYMBOL_REF_FLAG(xv))
     {
       fprintf(f, "=V(");
-      output_addr_const(f, xv);
+      output_addr_const(f, XVECEXP (xv, 0, 0));
       fprintf(f, ")");
       mvs_mark_alias(XSTR(xv, 0));
     }
     else
     {
       fprintf(f, "=A(");
-      output_addr_const(f, xv);
+      output_addr_const(f, XVECEXP (xv, 0, 0));
       fprintf(f, ")");
     }
     break;
   case CONST_INT:
     if (code == 'B')
-      fprintf(f, "%d", INTVAL(xv) & 0xff);
+      fprintf(f, "%i", INTVAL(xv) & 0xff);
     else if (code == 'X')
       fprintf(f, "%02X", INTVAL(xv) & 0xff);
     else if (code == 'h')
-      fprintf(f, "%d", (INTVAL(xv) << 16) >> 16);
+      fprintf(f, "%i", (INTVAL(xv) << 16) >> 16);
     else if (code == 'H')
     {
       mvs_page_lit += 2;
-      fprintf(f, "=H'%d'", (INTVAL(xv) << 16) >> 16);
+      fprintf(f, "=H'%i'", (INTVAL(xv) << 16) >> 16);
     }
     else if (code == 'K')
     {
       /* auto sign-extension of signed 16-bit to signed 32-bit */
       mvs_page_lit += 4;
-      fprintf(f, "=F'%d'", (INTVAL(xv) << 16) >> 16);
+      fprintf(f, "=F'%i'", (INTVAL(xv) << 16) >> 16);
     }
     else if (code == 'W')
     {
@@ -2343,7 +2343,7 @@ void i370_print_operand(FILE *f, rtx xv, int code)
     else
     {
       mvs_page_lit += 4;
-      fprintf(f, "=F'%d'", INTVAL(xv));
+      fprintf(f, "=F'%i'", INTVAL(xv));
     }
     break;
   case CONST_DOUBLE:
@@ -2401,18 +2401,18 @@ void i370_print_operand(FILE *f, rtx xv, int code)
         ASM_OUTPUT_LABELREF(f,
                             XSTR(XEXP(XEXP(xv, 0), 0), 0));
         if ((unsigned)xx < 4096)
-          fprintf(f, ")\n\tLA\t%s,%d(0,%s)", curreg,
+          fprintf(f, ")\n\tLA\t%s,%i(0,%s)", curreg,
                   xx,
                   curreg);
         else
-          fprintf(f, ")\n\tA\t%s,=F'%d'", curreg,
+          fprintf(f, ")\n\tA\t%s,=F'%i'", curreg,
                   xx);
         mvs_mark_alias(XSTR(XEXP(XEXP(xv, 0), 0), 0));
       }
       else
       {
         fprintf(f, "=A(");
-        output_addr_const(f, xv);
+        output_addr_const(f, XVECEXP (xv, 0, 0));
         fprintf(f, ")");
       }
     }
@@ -2420,7 +2420,7 @@ void i370_print_operand(FILE *f, rtx xv, int code)
     {
       mvs_page_lit += 4;
       fprintf(f, "=F'");
-      output_addr_const(f, xv);
+      output_addr_const(f, XVECEXP (xv, 0, 0));
       fprintf(f, "'");
     }
     break;
