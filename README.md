@@ -1,3 +1,5 @@
+NOTE: If you wish to build this, check the build.sh script in this repository for a quick "startup".
+
 This directory contains the GNU Compiler Collection (GCC).
 
 The GNU Compiler Collection is free software.  See the files whose
