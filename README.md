@@ -1,4 +1,5 @@
-= gcc-i370 =
+# gcc-i370
+
 A port of the i370 target to a modern gcc.
 NOTE: If you wish to build this, check the build.sh script in this repository for a quick "startup".
 
