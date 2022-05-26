@@ -4240,8 +4240,7 @@ verify_gimple_assign_ternary (gassign *stmt)
       return true;
     }
 
-  if ((rhs_code == COND_EXPR
-       ? !is_gimple_condexpr (rhs1) : !is_gimple_val (rhs1))
+  if (!is_gimple_val (rhs1)
       || !is_gimple_val (rhs2)
       || !is_gimple_val (rhs3))
     {
@@ -4284,17 +4283,8 @@ verify_gimple_assign_ternary (gassign *stmt)
 	  debug_generic_expr (rhs1_type);
 	  return true;
 	}
-      if (!is_gimple_val (rhs1))
-	return true;
       /* Fallthrough.  */
     case COND_EXPR:
-      if (!is_gimple_val (rhs1)
-	  && (!is_gimple_condexpr (rhs1)
-	      || verify_gimple_comparison (TREE_TYPE (rhs1),
-					   TREE_OPERAND (rhs1, 0),
-					   TREE_OPERAND (rhs1, 1),
-					   TREE_CODE (rhs1))))
-	return true;
       if (!useless_type_conversion_p (lhs_type, rhs2_type)
 	  || !useless_type_conversion_p (lhs_type, rhs3_type))
 	{
@@ -9038,11 +9028,16 @@ gimple_lv_add_condition_to_bb (basic_block first_head ATTRIBUTE_UNUSED,
   edge e0;
 
   /* Build new conditional expr */
+  gsi = gsi_last_bb (cond_bb);
+
+  cond_expr = force_gimple_operand_gsi_1 (&gsi, cond_expr,
+					  is_gimple_condexpr_for_cond,
+					  NULL_TREE, false,
+					  GSI_CONTINUE_LINKING);
   new_cond_expr = gimple_build_cond_from_tree (cond_expr,
 					       NULL_TREE, NULL_TREE);
 
   /* Add new cond in cond_bb.  */
-  gsi = gsi_last_bb (cond_bb);
   gsi_insert_after (&gsi, new_cond_expr, GSI_NEW_STMT);
 
   /* Adjust edges appropriately to connect new head with first head

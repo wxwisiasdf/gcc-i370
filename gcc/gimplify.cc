@@ -4257,14 +4257,14 @@ gimplify_pure_cond_expr (tree *expr_p, gimple_seq *pre_p)
     TREE_SET_CODE (cond, TRUTH_AND_EXPR);
   else if (code == TRUTH_ORIF_EXPR)
     TREE_SET_CODE (cond, TRUTH_OR_EXPR);
-  ret = gimplify_expr (&cond, pre_p, NULL, is_gimple_condexpr, fb_rvalue);
+  ret = gimplify_expr (&cond, pre_p, NULL, is_gimple_val, fb_rvalue);
   COND_EXPR_COND (*expr_p) = cond;
 
   tret = gimplify_expr (&COND_EXPR_THEN (expr), pre_p, NULL,
-				   is_gimple_val, fb_rvalue);
+			is_gimple_val, fb_rvalue);
   ret = MIN (ret, tret);
   tret = gimplify_expr (&COND_EXPR_ELSE (expr), pre_p, NULL,
-				   is_gimple_val, fb_rvalue);
+			is_gimple_val, fb_rvalue);
 
   return MIN (ret, tret);
 }
@@ -12319,17 +12319,34 @@ gimplify_omp_task (tree *expr_p, gimple_seq *pre_p)
   tree expr = *expr_p;
   gimple *g;
   gimple_seq body = NULL;
+  bool nowait = false;
+  bool has_depend = false;
 
   if (OMP_TASK_BODY (expr) == NULL_TREE)
-    for (tree c = OMP_TASK_CLAUSES (expr); c; c = OMP_CLAUSE_CHAIN (c))
-      if (OMP_CLAUSE_CODE (c) == OMP_CLAUSE_DEPEND
-	  && OMP_CLAUSE_DEPEND_KIND (c) == OMP_CLAUSE_DEPEND_MUTEXINOUTSET)
+    {
+      for (tree c = OMP_TASK_CLAUSES (expr); c; c = OMP_CLAUSE_CHAIN (c))
+	if (OMP_CLAUSE_CODE (c) == OMP_CLAUSE_DEPEND)
+	  {
+	    has_depend = true;
+	    if (OMP_CLAUSE_DEPEND_KIND (c) == OMP_CLAUSE_DEPEND_MUTEXINOUTSET)
+	      {
+		error_at (OMP_CLAUSE_LOCATION (c),
+			  "%<mutexinoutset%> kind in %<depend%> clause on a "
+			  "%<taskwait%> construct");
+		break;
+	      }
+	  }
+	else if (OMP_CLAUSE_CODE (c) == OMP_CLAUSE_NOWAIT)
+	  nowait = true;
+      if (nowait && !has_depend)
 	{
-	  error_at (OMP_CLAUSE_LOCATION (c),
-		    "%<mutexinoutset%> kind in %<depend%> clause on a "
-		    "%<taskwait%> construct");
-	  break;
+	  error_at (EXPR_LOCATION (expr),
+		    "%<taskwait%> construct with %<nowait%> clause but no "
+		    "%<depend%> clauses");
+	  *expr_p = NULL_TREE;
+	  return;
 	}
+    }
 
   gimplify_scan_omp_clauses (&OMP_TASK_CLAUSES (expr), pre_p,
 			     omp_find_clause (OMP_TASK_CLAUSES (expr),
@@ -15023,7 +15040,6 @@ gimplify_expr (tree *expr_p, gimple_seq *pre_p, gimple_seq *post_p,
     gcc_assert (fallback & (fb_rvalue | fb_lvalue));
   else if (gimple_test_f == is_gimple_val
            || gimple_test_f == is_gimple_call_addr
-           || gimple_test_f == is_gimple_condexpr
 	   || gimple_test_f == is_gimple_condexpr_for_cond
            || gimple_test_f == is_gimple_mem_rhs
            || gimple_test_f == is_gimple_mem_rhs_or_call

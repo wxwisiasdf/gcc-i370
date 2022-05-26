@@ -50,6 +50,12 @@ along with GCC; see the file COPYING3.  If not see
 #include "vec-perm-indices.h"
 #include "gimple-range.h"
 
+
+/* TODO:  Note the vectorizer still builds COND_EXPRs with GENERIC compares
+   in the first operand.  Disentangling this is future work, the
+   IL is properly transfered to VEC_COND_EXPRs with separate compares.  */
+
+
 /* Return true if we have a useful VR_RANGE range for VAR, storing it
    in *MIN_VALUE and *MAX_VALUE if so.  Note the range in the dump files.  */
 
@@ -2643,7 +2649,8 @@ vect_recog_rotate_pattern (vec_info *vinfo,
 
 	  vec_perm_indices indices (elts, 1,
 				    TYPE_VECTOR_SUBPARTS (char_vectype));
-	  if (can_vec_perm_const_p (TYPE_MODE (char_vectype), indices))
+	  machine_mode vmode = TYPE_MODE (char_vectype);
+	  if (can_vec_perm_const_p (vmode, vmode, indices))
 	    {
 	      /* vectorizable_bswap can handle the __builtin_bswap16 if we
 		 undo the argument promotion.  */
