@@ -184,9 +184,7 @@ static bool i370_hlasm_assemble_integer(rtx, unsigned int, int);
 #endif
 static void i370_output_function_prologue(FILE *f);
 static void i370_output_function_epilogue(FILE *f);
-#ifdef TARGET_ALIASES
 static int mvs_hash_alias(const char *);
-#endif
 
 /* ===================================================== */
 /* defines and functions specific to the HLASM assembler */
@@ -979,24 +977,17 @@ int mvs_function_check(const char *name)
 }
 
 /* Generate a hash for a given key.  */
-
-#ifdef TARGET_ALIASES
 static int
 mvs_hash_alias(const char *key)
 {
-  int h;
-  int i;
   int l = strlen(key);
-
-  h = (unsigned char)MAP_OUTCHAR(key[0]);
-  for (i = 1; i < l; i++)
+  int h = (unsigned char)MAP_OUTCHAR(key[0]);
+  for (int i = 1; i < l; i++)
     h = ((h * MVS_SET_SIZE) + (unsigned char)MAP_OUTCHAR(key[i])) % MVS_HASH_PRIME;
-  return (h);
+  return h;
 }
-#endif
 
 /* Add the alias to the current alias list.  */
-
 void mvs_add_alias(const char *realname, const char *aliasname, int emitted)
 {
   alias_node_t *ap = (alias_node_t *)xmalloc(sizeof(alias_node_t));
@@ -1093,19 +1084,8 @@ int mvs_dump_alias(FILE *f)
   return 0;
 }
 
-/* https://stackoverflow.com/questions/2624192/good-hash-function-for-strings */
-int mvs_hash_alias(const char *realname)
-{
-  size_t len = strlen(realname);
-  int hash = 7;
-  for (int i = 0; i < len; i++)
-    hash = hash * 31 + realname[i];
-  return hash;
-}
-
 /* Get the alias from the list.
    If 1 is returned then it's in the alias list, 0 if it was not */
-
 int mvs_get_alias(const char *realname, char *aliasname)
 {
 #ifdef TARGET_ALIASES
@@ -1119,20 +1099,13 @@ int mvs_get_alias(const char *realname, char *aliasname)
   }
   if (mvs_need_alias(realname))
   {
-    char c1, c2;
-
-    c1 = realname[0];
-    c2 = realname[1];
+    char c1 = realname[0];
     if (ISLOWER(c1))
       c1 = TOUPPER(c1);
     else if (c1 == '_')
-      c1 = 'A';
-    if (ISLOWER(c2))
-      c2 = TOUPPER(c2);
-    else if (c2 == '_' || c2 == '\0')
-      c2 = '#';
+      c1 = '@';
 
-    sprintf(aliasname, "%c%c%06d", c1, c2, mvs_hash_alias(realname));
+    sprintf(aliasname, "%c%07d", c1, mvs_hash_alias(realname));
     mvs_add_alias(realname, aliasname, 0);
     return 1;
   }
@@ -1142,7 +1115,8 @@ int mvs_get_alias(const char *realname, char *aliasname)
     size_t len = strlen(realname);
     if(len >= MAX_MVS_LABEL_SIZE)
       len = MAX_MVS_LABEL_SIZE;
-    strncpy(aliasname, realname, MAX_MVS_LABEL_SIZE);
+    /* strncpy(aliasname, realname, MAX_MVS_LABEL_SIZE); */
+    snprintf(aliasname, MAX_MVS_LABEL_SIZE, "%c%07d", realname[0], mvs_hash_alias(realname));
     aliasname[len] = '\0';
     return 1;
   }
@@ -1168,20 +1142,13 @@ int mvs_check_alias(const char *realname, char *aliasname)
   }
   if (mvs_need_alias(realname))
   {
-    char c1, c2;
-
-    c1 = realname[0];
-    c2 = realname[1];
+    char c1 = realname[0];
     if (ISLOWER(c1))
       c1 = TOUPPER(c1);
     else if (c1 == '_')
-      c1 = 'A';
-    if (ISLOWER(c2))
-      c2 = TOUPPER(c2);
-    else if (c2 == '_' || c2 == '\0')
-      c2 = '#';
+      c1 = '@';
 
-    sprintf(aliasname, "%c%c%06d", c1, c2, mvs_hash_alias(realname));
+    snprintf(aliasname, MAX_MVS_LABEL_SIZE, "%c%07d", c1, mvs_hash_alias(realname));
     mvs_add_alias(realname, aliasname, 0);
     alias_anchor->alias_emitted = 1;
     return 2;
@@ -1192,7 +1159,8 @@ int mvs_check_alias(const char *realname, char *aliasname)
     size_t len = strlen(realname);
     if(len >= MAX_MVS_LABEL_SIZE)
       len = MAX_MVS_LABEL_SIZE;
-    strncpy(aliasname, realname, MAX_MVS_LABEL_SIZE);
+    /* strncpy(aliasname, realname, MAX_MVS_LABEL_SIZE); */
+    snprintf(aliasname, MAX_MVS_LABEL_SIZE, "%c%07d", realname[0], mvs_hash_alias(realname));
     aliasname[len] = '\0';
     return 1;
   }
@@ -1460,10 +1428,10 @@ i370_output_function_prologue(FILE *f)
   char temp[MAX_MVS_LABEL_SIZE + 1];
   if (!mvs_get_alias(mvs_function_name, temp))
     strcpy(temp, mvs_function_name);
-  char ch = '@';
+  /* Replace underscores with @ characters and convert to uppercase */
   for (char *bp = temp; *bp; bp++)
-    *bp = (*bp == '_' ? ch : TOUPPER(*bp));
-  fprintf(f, "%-8sEQU *\n", temp);
+    *bp = (*bp == '_' ? '@' : TOUPPER(*bp));
+  fprintf(f, "%s\tEQU *\n", temp);
 
   fprintf(f, "\tB\t@@FEN%i\n", mvs_page_num);
 #ifdef TARGET_DIGNUS
