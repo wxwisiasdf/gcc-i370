@@ -16820,7 +16820,8 @@ int
 ix86_attr_length_vex_default (rtx_insn *insn, bool has_0f_opcode,
 			      bool has_vex_w)
 {
-  int i;
+  int i, reg_only = 2 + 1;
+  bool has_mem = false;
 
   /* Only 0f opcode can use 2 byte VEX prefix and  VEX W bit uses 3
      byte VEX prefix.  */
@@ -16840,16 +16841,23 @@ ix86_attr_length_vex_default (rtx_insn *insn, bool has_0f_opcode,
 	if (GET_MODE (recog_data.operand[i]) == DImode
 	    && GENERAL_REG_P (recog_data.operand[i]))
 	  return 3 + 1;
+
+	/* REX.B bit requires 3-byte VEX. Right here we don't know which
+	   operand will be encoded using VEX.B, so be conservative.  */
+	if (REX_INT_REGNO_P (recog_data.operand[i])
+	    || REX_SSE_REGNO_P (recog_data.operand[i]))
+	  reg_only = 3 + 1;
       }
-    else
+    else if (MEM_P (recog_data.operand[i]))
       {
 	/* REX.X or REX.B bits use 3 byte VEX prefix.  */
-	if (MEM_P (recog_data.operand[i])
-	    && x86_extended_reg_mentioned_p (recog_data.operand[i]))
+	if (x86_extended_reg_mentioned_p (recog_data.operand[i]))
 	  return 3 + 1;
+
+	has_mem = true;
       }
 
-  return 2 + 1;
+  return has_mem ? 2 + 1 : reg_only;
 }
 
 
@@ -20141,6 +20149,18 @@ ix86_modes_tieable_p (machine_mode mode1, machine_mode mode2)
     return (GET_MODE_SIZE (mode1) == 8
 	    && ix86_hard_regno_mode_ok (FIRST_MMX_REG, mode1));
 
+  /* SCmode and DImode can be tied.  */
+  if ((mode1 == E_SCmode && mode2 == E_DImode)
+      || (mode1 == E_DImode && mode2 == E_SCmode))
+    return TARGET_64BIT;
+
+  /* [SD]Cmode and V2[SD]Fmode modes can be tied.  */
+  if ((mode1 == E_SCmode && mode2 == E_V2SFmode)
+      || (mode1 == E_V2SFmode && mode2 == E_SCmode)
+      || (mode1 == E_DCmode && mode2 == E_V2DFmode)
+      || (mode1 == E_V2DFmode && mode2 == E_DCmode))
+    return true;
+
   return false;
 }
 
@@ -20981,6 +21001,51 @@ ix86_rtx_costs (rtx x, machine_mode mode, int outer_code_i, int opno,
          than one that does not.  */
       if (speed)
         *total += 1;
+      return false;
+
+    case ZERO_EXTRACT:
+      if (XEXP (x, 1) == const1_rtx
+	  && GET_CODE (XEXP (x, 2)) == ZERO_EXTEND
+	  && GET_MODE (XEXP (x, 2)) == SImode
+	  && GET_MODE (XEXP (XEXP (x, 2), 0)) == QImode)
+	{
+	  /* Ignore cost of zero extension and masking of last argument.  */
+	  *total += rtx_cost (XEXP (x, 0), mode, code, 0, speed);
+	  *total += rtx_cost (XEXP (x, 1), mode, code, 1, speed);
+	  *total += rtx_cost (XEXP (XEXP (x, 2), 0), mode, code, 2, speed);
+	  return true;
+	}
+      return false;
+
+    case IF_THEN_ELSE:
+      if (TARGET_XOP
+	  && VECTOR_MODE_P (mode)
+	  && (GET_MODE_SIZE (mode) == 16 || GET_MODE_SIZE (mode) == 32))
+	{
+	  /* vpcmov.  */
+	  *total = speed ? COSTS_N_INSNS (2) : COSTS_N_BYTES (6);
+	  if (!REG_P (XEXP (x, 0)))
+	    *total += rtx_cost (XEXP (x, 0), mode, code, 0, speed);
+	  if (!REG_P (XEXP (x, 1)))
+	    *total += rtx_cost (XEXP (x, 1), mode, code, 1, speed);
+	  if (!REG_P (XEXP (x, 2)))
+	    *total += rtx_cost (XEXP (x, 2), mode, code, 2, speed);
+	  return true;
+	}
+      else if (TARGET_CMOVE
+	       && SCALAR_INT_MODE_P (mode)
+	       && GET_MODE_SIZE (mode) <= UNITS_PER_WORD)
+	{
+	  /* cmov.  */
+	  *total = COSTS_N_INSNS (1);
+	  if (!REG_P (XEXP (x, 0)))
+	    *total += rtx_cost (XEXP (x, 0), mode, code, 0, speed);
+	  if (!REG_P (XEXP (x, 1)))
+	    *total += rtx_cost (XEXP (x, 1), mode, code, 1, speed);
+	  if (!REG_P (XEXP (x, 2)))
+	    *total += rtx_cost (XEXP (x, 2), mode, code, 2, speed);
+	  return true;
+	}
       return false;
 
     default:

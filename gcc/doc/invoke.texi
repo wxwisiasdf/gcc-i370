@@ -301,7 +301,7 @@ Objective-C and Objective-C++ Dialects}.
 -fdiagnostics-show-location=@r{[}once@r{|}every-line@r{]}  @gol
 -fdiagnostics-color=@r{[}auto@r{|}never@r{|}always@r{]}  @gol
 -fdiagnostics-urls=@r{[}auto@r{|}never@r{|}always@r{]}  @gol
--fdiagnostics-format=@r{[}text@r{|}json@r{]}  @gol
+-fdiagnostics-format=@r{[}text@r{|}sarif-stderr@r{|}sarif-file@r{|}json@r{|}json-stderr@r{|}json-file@r{]}  @gol
 -fno-diagnostics-show-option  -fno-diagnostics-show-caret @gol
 -fno-diagnostics-show-labels  -fno-diagnostics-show-line-numbers @gol
 -fno-diagnostics-show-cwe  @gol
@@ -5305,14 +5305,23 @@ Unicode characters.  For the example above, the following will be printed:
 @item -fdiagnostics-format=@var{FORMAT}
 @opindex fdiagnostics-format
 Select a different format for printing diagnostics.
-@var{FORMAT} is @samp{text} or @samp{json}.
+@var{FORMAT} is @samp{text}, @samp{sarif-stderr}, @samp{sarif-file},
+@samp{json}, @samp{json-stderr}, or @samp{json-file}.
+
 The default is @samp{text}.
 
-The @samp{json} format consists of a top-level JSON array containing JSON
-objects representing the diagnostics.
+The @samp{sarif-stderr} and @samp{sarif-file} formats both emit
+diagnostics in SARIF Version 2.1.0 format, either to stderr, or to a file
+named @file{@var{source}.sarif}, respectively.
 
-The JSON is emitted as one line, without formatting; the examples below
-have been formatted for clarity.
+The @samp{json} format is a synonym for @samp{json-stderr}.
+The @samp{json-stderr} and @samp{json-file} formats are identical, apart from
+where the JSON is emitted to - with the former, the JSON is emitted to stderr,
+whereas with @samp{json-file} it is written to @file{@var{source}.gcc.json}.
+
+The emitted JSON consists of a top-level JSON array containing JSON objects
+representing the diagnostics.  The JSON is emitted as one line, without
+formatting; the examples below have been formatted for clarity.
 
 Diagnostics can have child diagnostics.  For example, this error and note:
 
@@ -8892,7 +8901,7 @@ such as in
 void f (void);
 void g (void)
 @{
-  if (!func)   // warning: expression evaluates to false
+  if (!f)   // warning: expression evaluates to false
     abort ();
 @}
 @end smallexample
@@ -8918,7 +8927,7 @@ weak symbols), so their use in a conditional might indicate missing
 parentheses in a function call or a missing dereference in an array
 expression.  The subset of the warning for object pointers can be
 suppressed by casting the pointer operand to an integer type such
-as @code{inptr_t} or @code{uinptr_t}.
+as @code{intptr_t} or @code{uintptr_t}.
 Comparisons against string literals result in unspecified behavior
 and are not portable, and suggest the intent was to call @code{strcmp}.
 The warning is suppressed if the suspicious expression is the result
@@ -21181,7 +21190,8 @@ Permissible names are: @samp{arm7tdmi}, @samp{arm7tdmi-s}, @samp{arm710t},
 @samp{cortex-m0plus.small-multiply}, @samp{exynos-m1}, @samp{marvell-pj4},
 @samp{neoverse-n1}, @samp{neoverse-n2}, @samp{neoverse-v1}, @samp{xscale},
 @samp{iwmmxt}, @samp{iwmmxt2}, @samp{ep9312}, @samp{fa526}, @samp{fa626},
-@samp{fa606te}, @samp{fa626te}, @samp{fmp626}, @samp{fa726te}, @samp{xgene1}.
+@samp{fa606te}, @samp{fa626te}, @samp{fmp626}, @samp{fa726te}, @samp{star-mc1},
+@samp{xgene1}.
 
 Additionally, this option can specify that GCC should tune the performance
 of the code for a big.LITTLE system.  Permissible names are:
@@ -21587,8 +21597,9 @@ Development Tools Engineering Specification", which can be found on
 Mitigate against a potential security issue with the @code{VLLDM} instruction
 in some M-profile devices when using CMSE (CVE-2021-365465).  This option is
 enabled by default when the option @option{-mcpu=} is used with
-@code{cortex-m33}, @code{cortex-m35p} or @code{cortex-m55}.  The option
-@option{-mno-fix-cmse-cve-2021-35465} can be used to disable the mitigation.
+@code{cortex-m33}, @code{cortex-m35p}, @code{cortex-m55} or @code{star-mc1}.
+The option @option{-mno-fix-cmse-cve-2021-35465} can be used to disable
+the mitigation.
 
 @item -mstack-protector-guard=@var{guard}
 @itemx -mstack-protector-guard-offset=@var{offset}

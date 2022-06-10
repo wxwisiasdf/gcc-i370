@@ -2294,8 +2294,8 @@ duplicate_decls (tree newdecl, tree olddecl, bool hiding, bool was_hidden)
 	      merge_default_template_args (new_parms, old_parms,
 					   /*class_p=*/false);
 	    }
-	  if (!DECL_UNIQUE_FRIEND_P (old_result))
-	    DECL_UNIQUE_FRIEND_P (new_result) = false;
+	  if (!DECL_UNIQUE_FRIEND_P (new_result))
+	    DECL_UNIQUE_FRIEND_P (old_result) = false;
 
 	  check_default_args (newdecl);
 
@@ -2663,6 +2663,11 @@ duplicate_decls (tree newdecl, tree olddecl, bool hiding, bool was_hidden)
 		TINFO_USED_TEMPLATE_ID (DECL_TEMPLATE_INFO (olddecl))
 		  = TINFO_USED_TEMPLATE_ID (new_template_info);
 	    }
+
+	  /* We don't want to copy template info from a non-templated friend
+	     (PR105761), but these shouldn't have DECL_TEMPLATE_INFO now.  */
+	  gcc_checking_assert (!DECL_TEMPLATE_INFO (olddecl)
+			       || !non_templated_friend_p (olddecl));
 	  DECL_TEMPLATE_INFO (newdecl) = DECL_TEMPLATE_INFO (olddecl);
 	}
 
@@ -10789,9 +10794,7 @@ grokvardecl (tree type,
   else if (flag_concepts
 	   && current_template_depth > template_class_depth (scope))
     {
-      tree reqs = TEMPLATE_PARMS_CONSTRAINTS (current_template_parms);
-      tree ci = build_constraints (reqs, NULL_TREE);
-
+      tree ci = current_template_constraints ();
       set_constraints (decl, ci);
     }
 
@@ -12377,7 +12380,7 @@ grokdeclarator (const cp_declarator *declarator,
     type = DECL_ORIGINAL_TYPE (TYPE_NAME (type));
 
   type_quals |= cp_type_quals (type);
-  type = cp_build_qualified_type_real
+  type = cp_build_qualified_type
     (type, type_quals, ((((typedef_decl && !DECL_ARTIFICIAL (typedef_decl))
 			  || declspecs->decltype_p)
 			 ? tf_ignore_bad_quals : 0) | tf_warning_or_error));
@@ -14227,9 +14230,7 @@ grokdeclarator (const cp_declarator *declarator,
 				> template_class_depth (current_class_type));
 		if (memtmpl)
 		  {
-		    tree tmpl_reqs
-		      = TEMPLATE_PARMS_CONSTRAINTS (current_template_parms);
-		    tree ci = build_constraints (tmpl_reqs, NULL_TREE);
+		    tree ci = current_template_constraints ();
 		    set_constraints (decl, ci);
 		  }
 	      }
@@ -15852,13 +15853,8 @@ xref_tag (enum tag_types tag_code, tree name,
         {
           /* Check that we aren't trying to overload a class with different
              constraints.  */
-          tree constr = NULL_TREE;
-          if (current_template_parms)
-            {
-              tree reqs = TEMPLATE_PARMS_CONSTRAINTS (current_template_parms);
-              constr = build_constraints (reqs, NULL_TREE);
-            }
-	  if (!redeclare_class_template (t, current_template_parms, constr))
+	  if (!redeclare_class_template (t, current_template_parms,
+					 current_template_constraints ()))
 	    return error_mark_node;
         }
       else if (!processing_template_decl
@@ -16315,8 +16311,11 @@ start_enum (tree name, tree enumtype, tree underlying_type,
       else if (dependent_type_p (underlying_type))
 	ENUM_UNDERLYING_TYPE (enumtype) = underlying_type;
       else
-        error ("underlying type %qT of %qT must be an integral type", 
-               underlying_type, enumtype);
+	{
+	  error ("underlying type %qT of %qT must be an integral type", 
+		 underlying_type, enumtype);
+	  ENUM_UNDERLYING_TYPE (enumtype) = integer_type_node;
+	}
     }
 
   /* If into a template class, the returned enum is always the first

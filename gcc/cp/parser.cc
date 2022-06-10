@@ -8262,7 +8262,7 @@ cp_parser_postfix_dot_deref_expression (cp_parser *parser,
       tree type = TREE_TYPE (postfix_expression);
       /* If we don't have a (type-dependent) object of class type, use
 	 typeof to figure out the type of the object.  */
-      if (type == NULL_TREE)
+      if (type == NULL_TREE || is_auto (type))
 	type = finish_typeof (postfix_expression);
       parser->context->object_type = type;
     }
@@ -19106,7 +19106,7 @@ cp_parser_explicit_instantiation (cp_parser* parser)
   cp_decl_specifier_seq decl_specifiers;
   tree extension_specifier = NULL_TREE;
 
-  timevar_push (TV_TEMPLATE_INST);
+  auto_timevar tv (TV_TEMPLATE_INST);
 
   /* Look for an (optional) storage-class-specifier or
      function-specifier.  */
@@ -19206,8 +19206,6 @@ cp_parser_explicit_instantiation (cp_parser* parser)
   end_explicit_instantiation ();
 
   cp_parser_consume_semicolon_at_end_of_statement (parser);
-
-  timevar_pop (TV_TEMPLATE_INST);
 
   cp_finalize_omp_declare_simd (parser, &odsd);
 }
@@ -20966,7 +20964,8 @@ cp_parser_enum_specifier (cp_parser* parser)
      elaborated-type-specifier.  */
   if (cp_lexer_next_token_is (parser->lexer, CPP_OPEN_BRACE))
     {
-      timevar_push (TV_PARSE_ENUM);
+      auto_timevar tv (TV_PARSE_ENUM);
+
       if (nested_name_specifier
 	  && nested_name_specifier != error_mark_node)
 	{
@@ -21072,7 +21071,6 @@ cp_parser_enum_specifier (cp_parser* parser)
 
       if (scoped_enum_p)
 	finish_scope ();
-      timevar_pop (TV_PARSE_ENUM);
     }
   else
     {
@@ -25927,9 +25925,11 @@ pop_injected_parms (void)
 
    Returns the TREE_TYPE representing the class.  */
 
-static tree
-cp_parser_class_specifier_1 (cp_parser* parser)
+tree
+cp_parser_class_specifier (cp_parser* parser)
 {
+  auto_timevar tv (TV_PARSE_STRUCT);
+
   tree type;
   tree attributes = NULL_TREE;
   bool nested_name_specifier_p;
@@ -26319,16 +26319,6 @@ cp_parser_class_specifier_1 (cp_parser* parser)
     = saved_in_unbraced_linkage_specification_p;
 
   return type;
-}
-
-static tree
-cp_parser_class_specifier (cp_parser* parser)
-{
-  tree ret;
-  timevar_push (TV_PARSE_STRUCT);
-  ret = cp_parser_class_specifier_1 (parser);
-  timevar_pop (TV_PARSE_STRUCT);
-  return ret;
 }
 
 /* Parse a class-head.
@@ -28737,9 +28727,17 @@ cp_nth_tokens_can_be_attribute_p (cp_parser *parser, size_t n)
 static tree
 cp_parser_attributes_opt (cp_parser *parser)
 {
-  if (cp_next_tokens_can_be_gnu_attribute_p (parser))
-    return cp_parser_gnu_attributes_opt (parser);
-  return cp_parser_std_attribute_spec_seq (parser);
+  tree attrs = NULL_TREE;
+  while (true)
+    {
+      if (cp_next_tokens_can_be_gnu_attribute_p (parser))
+	attrs = attr_chainon (attrs, cp_parser_gnu_attributes_opt (parser));
+      else if (cp_next_tokens_can_be_std_attribute_p (parser))
+	attrs = attr_chainon (attrs, cp_parser_std_attribute_spec_seq (parser));
+      else
+	break;
+    }
+  return attrs;
 }
 
 /* Parse an (optional) series of attributes.
@@ -31276,15 +31274,10 @@ cp_parser_function_definition_from_specifiers_and_declarator
     }
   else
     {
-      timevar_id_t tv;
-      if (DECL_DECLARED_INLINE_P (current_function_decl))
-        tv = TV_PARSE_INLINE;
-      else
-        tv = TV_PARSE_FUNC;
-      timevar_push (tv);
+      auto_timevar tv (DECL_DECLARED_INLINE_P (current_function_decl)
+		       ? TV_PARSE_INLINE : TV_PARSE_FUNC);
       fn = cp_parser_function_definition_after_declarator (parser,
 							 /*inline_p=*/false);
-      timevar_pop (tv);
     }
 
   return fn;
@@ -32276,7 +32269,8 @@ cp_parser_enclosed_template_argument_list (cp_parser* parser)
 static void
 cp_parser_late_parsing_for_member (cp_parser* parser, tree member_function)
 {
-  timevar_push (TV_PARSE_INMETH);
+  auto_timevar tv (TV_PARSE_INMETH);
+
   /* If this member is a template, get the underlying
      FUNCTION_DECL.  */
   if (DECL_FUNCTION_TEMPLATE_P (member_function))
@@ -32346,7 +32340,6 @@ cp_parser_late_parsing_for_member (cp_parser* parser, tree member_function)
 
   /* Restore the queue.  */
   pop_unparsed_function_queues (parser);
-  timevar_pop (TV_PARSE_INMETH);
 }
 
 /* If DECL contains any default args, remember it on the unparsed
@@ -38949,7 +38942,21 @@ cp_parser_omp_clause_lastprivate (cp_parser *parser, tree list)
 
    OpenMP 4.5:
    linear ( modifier ( variable-list ) )
-   linear ( modifier ( variable-list ) : expression ) */
+   linear ( modifier ( variable-list ) : expression )
+
+   modifier:
+     val
+     ref
+     uval
+
+   OpenMP 5.2:
+   linear ( variable-list : modifiers-list )
+
+   modifiers:
+     val
+     ref
+     uval
+     step ( expression )  */
 
 static tree
 cp_parser_omp_clause_linear (cp_parser *parser, tree list,
@@ -38958,6 +38965,7 @@ cp_parser_omp_clause_linear (cp_parser *parser, tree list,
   tree nlist, c, step = integer_one_node;
   bool colon;
   enum omp_clause_linear_kind kind = OMP_CLAUSE_LINEAR_DEFAULT;
+  bool old_linear_modifier = false;
 
   matching_parens parens;
   if (!parens.require_open (parser))
@@ -38975,7 +38983,10 @@ cp_parser_omp_clause_linear (cp_parser *parser, tree list,
       else if (strcmp ("uval", p) == 0)
 	kind = OMP_CLAUSE_LINEAR_UVAL;
       if (cp_lexer_nth_token_is (parser->lexer, 2, CPP_OPEN_PAREN))
-	cp_lexer_consume_token (parser->lexer);
+	{
+	  cp_lexer_consume_token (parser->lexer);
+	  old_linear_modifier = true;
+	}
       else
 	kind = OMP_CLAUSE_LINEAR_DEFAULT;
     }
@@ -38997,10 +39008,109 @@ cp_parser_omp_clause_linear (cp_parser *parser, tree list,
 
   if (colon)
     {
+      bool has_modifiers = false;
+      if (kind == OMP_CLAUSE_LINEAR_DEFAULT
+	  && cp_lexer_next_token_is (parser->lexer, CPP_NAME))
+	{
+	  tree id = cp_lexer_peek_token (parser->lexer)->u.value;
+	  const char *p = IDENTIFIER_POINTER (id);
+	  size_t pos = 0;
+	  if (strcmp ("ref", p) == 0
+	      || strcmp ("val", p) == 0
+	      || strcmp ("uval", p) == 0)
+	    pos = 2;
+	  else if (strcmp ("step", p) == 0
+		   && cp_lexer_nth_token_is (parser->lexer, 2, CPP_OPEN_PAREN))
+	    {
+	      pos = cp_parser_skip_balanced_tokens (parser, 2);
+	      if (pos == 2)
+		pos = 0;
+	    }
+	  if (pos != 0
+	      && (cp_lexer_nth_token_is (parser->lexer, pos, CPP_COMMA)
+		  || cp_lexer_nth_token_is (parser->lexer, pos,
+					    CPP_CLOSE_PAREN)))
+	    has_modifiers = true;
+	}
+
       step = NULL_TREE;
-      if (declare_simd
-	  && cp_lexer_next_token_is (parser->lexer, CPP_NAME)
-	  && cp_lexer_nth_token_is (parser->lexer, 2, CPP_CLOSE_PAREN))
+      if (has_modifiers)
+	{
+	  while (cp_lexer_next_token_is (parser->lexer, CPP_NAME))
+	    {
+	      tree id = cp_lexer_peek_token (parser->lexer)->u.value;
+	      const char *p = IDENTIFIER_POINTER (id);
+	      enum omp_clause_linear_kind nkind = OMP_CLAUSE_LINEAR_DEFAULT;
+	      if (strcmp ("ref", p) == 0)
+		nkind = OMP_CLAUSE_LINEAR_REF;
+	      else if (strcmp ("val", p) == 0)
+		nkind = OMP_CLAUSE_LINEAR_VAL;
+	      else if (strcmp ("uval", p) == 0)
+		nkind = OMP_CLAUSE_LINEAR_UVAL;
+	      if (nkind != OMP_CLAUSE_LINEAR_DEFAULT)
+		{
+		  if (kind != OMP_CLAUSE_LINEAR_DEFAULT)
+		    error_at (cp_lexer_peek_token (parser->lexer)->location,
+			      "multiple linear modifiers");
+		  kind = nkind;
+		  cp_lexer_consume_token (parser->lexer);
+		}
+	      else if (strcmp ("step", p) == 0)
+		{
+		  location_t step_loc
+		    = cp_lexer_peek_token (parser->lexer)->location;
+		  cp_lexer_consume_token (parser->lexer);
+		  matching_parens parens2;
+		  if (parens2.require_open (parser))
+		    {
+		      if (step)
+			error_at (step_loc, "multiple %<step%> modifiers");
+		      if (declare_simd
+			  && cp_lexer_next_token_is (parser->lexer, CPP_NAME)
+			  && cp_lexer_nth_token_is (parser->lexer, 2,
+						    CPP_CLOSE_PAREN))
+			{
+			  cp_token *token
+			    = cp_lexer_peek_token (parser->lexer);
+			  location_t tok_loc = token->location;
+			  cp_parser_parse_tentatively (parser);
+			  step = cp_parser_id_expression (parser, false, true,
+							  NULL, false, false);
+			  if (step != error_mark_node)
+			    step = cp_parser_lookup_name_simple (parser, step,
+								 tok_loc);
+			  if (step == error_mark_node)
+			    {
+			      step = NULL_TREE;
+			      cp_parser_abort_tentative_parse (parser);
+			    }
+			  else if (!cp_parser_parse_definitely (parser))
+			    step = NULL_TREE;
+			}
+		      if (!step)
+			step = cp_parser_assignment_expression (parser);
+		      if (!parens2.require_close (parser))
+			cp_parser_skip_to_closing_parenthesis (parser, true,
+							       false, true);
+		    }
+		  else
+		    break;
+		}
+	      else
+		break;
+	      if (cp_lexer_next_token_is (parser->lexer, CPP_COMMA))
+		{
+		  cp_lexer_consume_token (parser->lexer);
+		  continue;
+		}
+	      break;
+	    }
+	  if (!step)
+	    step = integer_one_node;
+	}
+      else if (declare_simd
+	       && cp_lexer_next_token_is (parser->lexer, CPP_NAME)
+	       && cp_lexer_nth_token_is (parser->lexer, 2, CPP_CLOSE_PAREN))
 	{
 	  cp_token *token = cp_lexer_peek_token (parser->lexer);
 	  cp_parser_parse_tentatively (parser);
@@ -39035,6 +39145,7 @@ cp_parser_omp_clause_linear (cp_parser *parser, tree list,
     {
       OMP_CLAUSE_LINEAR_STEP (c) = step;
       OMP_CLAUSE_LINEAR_KIND (c) = kind;
+      OMP_CLAUSE_LINEAR_OLD_LINEAR_MODIFIER (c) = old_linear_modifier;
     }
 
   return nlist;
@@ -43747,7 +43858,9 @@ cp_parser_omp_single (cp_parser *parser, cp_token *pragma_tok, bool *if_p)
 
 #define OMP_SCOPE_CLAUSE_MASK					\
 	( (OMP_CLAUSE_MASK_1 << PRAGMA_OMP_CLAUSE_PRIVATE)	\
+	| (OMP_CLAUSE_MASK_1 << PRAGMA_OMP_CLAUSE_FIRSTPRIVATE)	\
 	| (OMP_CLAUSE_MASK_1 << PRAGMA_OMP_CLAUSE_REDUCTION)	\
+	| (OMP_CLAUSE_MASK_1 << PRAGMA_OMP_CLAUSE_ALLOCATE)	\
 	| (OMP_CLAUSE_MASK_1 << PRAGMA_OMP_CLAUSE_NOWAIT))
 
 static tree

@@ -1207,21 +1207,12 @@ package body Sem_Ch5 is
                --  There may have been a previous reference to a component of
                --  the variable, which in general removes the Last_Assignment
                --  field of the variable to indicate a relevant use of the
-               --  previous assignment. However, if the assignment is to a
-               --  subcomponent the reference may not have registered, because
-               --  it is not possible to determine whether the context is an
-               --  assignment. In those cases we generate a Deferred_Reference,
-               --  to be used at the end of compilation to generate the right
-               --  kind of reference, and we suppress a potential warning for
-               --  a useless assignment, which might be premature. This may
-               --  lose a warning in rare cases, but seems preferable to a
-               --  misleading warning.
+               --  previous assignment.
 
                if Warn_On_Modified_Unread
                  and then Is_Assignable (Ent)
                  and then Comes_From_Source (N)
                  and then In_Extended_Main_Source_Unit (Ent)
-                 and then not Has_Deferred_Reference (Ent)
                  and then not Has_Target_Names (N)
                then
                   Warn_On_Useless_Assignment (Ent, N);
@@ -2028,13 +2019,11 @@ package body Sem_Ch5 is
 
       --  Now to analyze the elsif parts if any are present
 
-      if Present (Elsif_Parts (N)) then
-         E := First (Elsif_Parts (N));
-         while Present (E) loop
-            Analyze_Cond_Then (E);
-            Next (E);
-         end loop;
-      end if;
+      E := First (Elsif_Parts (N));
+      while Present (E) loop
+         Analyze_Cond_Then (E);
+         Next (E);
+      end loop;
 
       if Present (Else_Statements (N)) then
          Analyze_Statements (Else_Statements (N));
@@ -2063,13 +2052,11 @@ package body Sem_Ch5 is
          if Is_True (Expr_Value (Condition (N))) then
             Remove_Warning_Messages (Else_Statements (N));
 
-            if Present (Elsif_Parts (N)) then
-               E := First (Elsif_Parts (N));
-               while Present (E) loop
-                  Remove_Warning_Messages (Then_Statements (E));
-                  Next (E);
-               end loop;
-            end if;
+            E := First (Elsif_Parts (N));
+            while Present (E) loop
+               Remove_Warning_Messages (Then_Statements (E));
+               Next (E);
+            end loop;
 
          else
             Remove_Warning_Messages (Then_Statements (N));
@@ -2121,9 +2108,6 @@ package body Sem_Ch5 is
    --  An implicit label declaration is generated in the innermost enclosing
    --  declarative part. This is done for labels, and block and loop names.
 
-   --  Note: any changes in this routine may need to be reflected in
-   --  Analyze_Label_Entity.
-
    procedure Analyze_Implicit_Label_Declaration (N : Node_Id) is
       Id : constant Node_Id := Defining_Identifier (N);
    begin
@@ -2131,6 +2115,13 @@ package body Sem_Ch5 is
       Mutate_Ekind        (Id, E_Label);
       Set_Etype           (Id, Standard_Void_Type);
       Set_Enclosing_Scope (Id, Current_Scope);
+
+      --  A label declared within a Ghost region becomes Ghost (SPARK RM
+      --  6.9(2)).
+
+      if Ghost_Mode > None then
+         Set_Is_Ghost_Entity (Id);
+      end if;
    end Analyze_Implicit_Label_Declaration;
 
    ------------------------------
@@ -2889,18 +2880,6 @@ package body Sem_Ch5 is
    begin
       Kill_Current_Values;
    end Analyze_Label;
-
-   --------------------------
-   -- Analyze_Label_Entity --
-   --------------------------
-
-   procedure Analyze_Label_Entity (E : Entity_Id) is
-   begin
-      Mutate_Ekind        (E, E_Label);
-      Set_Etype           (E, Standard_Void_Type);
-      Set_Enclosing_Scope (E, Current_Scope);
-      Set_Reachable       (E, True);
-   end Analyze_Label_Entity;
 
    ------------------------------------------
    -- Analyze_Loop_Parameter_Specification --
@@ -4064,6 +4043,12 @@ package body Sem_Ch5 is
       --    * The loop is using a parameter specification where the discrete
       --      range requires the secondary stack. In this case the loop is
       --      wrapped within a block in order to manage the secondary stack.
+
+      --  ??? This overlooks finalization: the loop may leave the secondary
+      --  stack untouched, but its iterator or discrete range may need
+      --  finalization, in which case the block is also required. Therefore
+      --  the criterion must be based on Sem_Util.Requires_Transient_Scope,
+      --  which happens to be what is currently implemented.
 
       if Present (Iter) then
          declare

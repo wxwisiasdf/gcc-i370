@@ -3387,8 +3387,7 @@ finish_template_template_parm (tree aggr, tree identifier)
 
   /* Associate the constraints with the underlying declaration,
      not the template.  */
-  tree reqs = TEMPLATE_PARMS_CONSTRAINTS (current_template_parms);
-  tree constr = build_constraints (reqs, NULL_TREE);
+  tree constr = current_template_constraints ();
   set_constraints (decl, constr);
 
   end_template_decl ();
@@ -4138,6 +4137,15 @@ finish_id_expression_1 (tree id_expression,
 	  *non_integral_constant_expression_p = true;
 	}
       return r;
+    }
+  else if (TREE_CODE (decl) == UNBOUND_CLASS_TEMPLATE)
+    {
+      gcc_checking_assert (scope);
+      *idk = CP_ID_KIND_QUALIFIED;
+      cp_warn_deprecated_use_scopes (scope);
+      decl = finish_qualified_id_expr (scope, decl, done, address_p,
+				       template_p, template_arg_p,
+				       tf_warning_or_error);
     }
   else
     {
@@ -6819,10 +6827,22 @@ finish_omp_clauses (tree clauses, enum c_omp_region_type ort)
 	  if (ort != C_ORT_OMP_DECLARE_SIMD
 	      && OMP_CLAUSE_LINEAR_KIND (c) != OMP_CLAUSE_LINEAR_DEFAULT)
 	    {
-	      error_at (OMP_CLAUSE_LOCATION (c),
-			"modifier should not be specified in %<linear%> "
-			"clause on %<simd%> or %<for%> constructs");
-	      OMP_CLAUSE_LINEAR_KIND (c) = OMP_CLAUSE_LINEAR_DEFAULT;
+	      if (OMP_CLAUSE_LINEAR_OLD_LINEAR_MODIFIER (c))
+		{
+		  error_at (OMP_CLAUSE_LOCATION (c),
+			    "modifier should not be specified in %<linear%> "
+			    "clause on %<simd%> or %<for%> constructs when "
+			    "not using OpenMP 5.2 modifiers");
+		  OMP_CLAUSE_LINEAR_KIND (c) = OMP_CLAUSE_LINEAR_DEFAULT;
+		}
+	      else if (OMP_CLAUSE_LINEAR_KIND (c) != OMP_CLAUSE_LINEAR_VAL)
+		{
+		  error_at (OMP_CLAUSE_LOCATION (c),
+			    "modifier other than %<val%> specified in "
+			    "%<linear%> clause on %<simd%> or %<for%> "
+			    "constructs when using OpenMP 5.2 modifiers");
+		  OMP_CLAUSE_LINEAR_KIND (c) = OMP_CLAUSE_LINEAR_DEFAULT;
+		}
 	    }
 	  if ((VAR_P (t) || TREE_CODE (t) == PARM_DECL)
 	      && !type_dependent_expression_p (t))

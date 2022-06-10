@@ -4958,7 +4958,7 @@ package body Sem_Elab is
          then
             Error_Msg_Name_1 := Attribute_Name (Attr);
             Error_Msg_NE
-              ("??% attribute of & before body seen", Attr, Subp_Id);
+              ("?.f?% attribute of & before body seen", Attr, Subp_Id);
             Error_Msg_N ("\possible Program_Error on later references", Attr);
 
             Output_Active_Scenarios (Attr, New_In_State);
@@ -18910,18 +18910,16 @@ package body Sem_Elab is
 
       procedure Collect_Tasks (Decls : List_Id) is
       begin
-         if Present (Decls) then
-            Decl := First (Decls);
-            while Present (Decl) loop
-               if Nkind (Decl) = N_Object_Declaration
-                 and then Has_Task (Etype (Defining_Identifier (Decl)))
-               then
-                  Add_Task_Proc (Etype (Defining_Identifier (Decl)));
-               end if;
+         Decl := First (Decls);
+         while Present (Decl) loop
+            if Nkind (Decl) = N_Object_Declaration
+              and then Has_Task (Etype (Defining_Identifier (Decl)))
+            then
+               Add_Task_Proc (Etype (Defining_Identifier (Decl)));
+            end if;
 
-               Next (Decl);
-            end loop;
-         end if;
+            Next (Decl);
+         end loop;
       end Collect_Tasks;
 
       ----------------
