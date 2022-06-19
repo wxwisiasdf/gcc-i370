@@ -349,6 +349,17 @@ enum reg_class
   ((REGNO) >= 16 ? FP_REGS : (REGNO) != 0 ? ADDR_REGS \
                                           : DATA_REGS)
 
+/* The letters I, J, K, L and M in a register constraint string can be used
+   to stand for particular ranges of immediate operands.
+   This macro defines what the ranges are.
+   C is the letter, and VALUE is a constant value.
+   Return 1 if VALUE is in the range specified by C.  */
+
+#define CONST_OK_FOR_LETTER_P_NO_POISON(VALUE, C)					\
+  ((C) == 'I' ? (unsigned) (VALUE) < 256 :				\
+   (C) == 'J' ? (unsigned) (VALUE) < 4096 :				\
+   (C) == 'K' ? (VALUE) >= -32768 && (VALUE) < 32768 : 0)
+
 /* The class value for index registers, and the one for base regs.  */
 
 #define INDEX_REG_CLASS ADDR_REGS

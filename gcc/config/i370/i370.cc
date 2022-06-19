@@ -2413,20 +2413,20 @@ void i370_print_operand(FILE *f, rtx xv, int code)
   }
 }
 
-#undef TARGET_LIBCALL_VALUE
-#define TARGET_LIBCALL_VALUE i370_libcall_value
-#undef TARGET_PASS_BY_REFERENCE
-#define TARGET_PASS_BY_REFERENCE i370_pass_by_reference
-#undef TARGET_FUNCTION_OK_FOR_SIBCALL
-#define TARGET_FUNCTION_OK_FOR_SIBCALL i370_function_ok_for_sibcall
+//#undef TARGET_LIBCALL_VALUE
+//#define TARGET_LIBCALL_VALUE i370_libcall_value
+//#undef TARGET_PASS_BY_REFERENCE
+//#define TARGET_PASS_BY_REFERENCE i370_pass_by_reference
+//#undef TARGET_FUNCTION_OK_FOR_SIBCALL
+//#define TARGET_FUNCTION_OK_FOR_SIBCALL i370_function_ok_for_sibcall
 #undef TARGET_FUNCTION_ARG
 #define TARGET_FUNCTION_ARG i370_function_arg
 #undef TARGET_FUNCTION_ARG_ADVANCE
 #define TARGET_FUNCTION_ARG_ADVANCE i370_function_arg_advance
-#undef TARGET_FUNCTION_ARG_PADDING
-#define TARGET_FUNCTION_ARG_PADDING i370_function_arg_padding
-#undef TARGET_FUNCTION_VALUE
-#define TARGET_FUNCTION_VALUE i370_function_value
+//#undef TARGET_FUNCTION_ARG_PADDING
+//#define TARGET_FUNCTION_ARG_PADDING i370_function_arg_padding
+//#undef TARGET_FUNCTION_VALUE
+//#define TARGET_FUNCTION_VALUE i370_function_value
 #undef TARGET_ASM_OUTPUT_IDENT
 #define TARGET_ASM_OUTPUT_IDENT i370_asm_output_ident_directive
 #undef TARGET_ASM_CONSTRUCTOR
