@@ -40,6 +40,7 @@ extern bool s390_handle_option (struct gcc_options *opts ATTRIBUTE_UNUSED,
 /* Declare functions in s390.cc.  */
 
 extern HOST_WIDE_INT s390_initial_elimination_offset (int, int);
+extern const char *s390_emit_branch_indirect (void);
 extern void s390_emit_prologue (void);
 extern void s390_emit_epilogue (bool);
 extern void s390_expand_split_stack_prologue (void);
