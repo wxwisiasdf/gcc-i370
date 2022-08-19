@@ -3220,6 +3220,15 @@ i370-*)
 	out_file=i370/i370.cc
 	tmake_file="${tmake_file} i370/t-i370 i370/t-mvs"
 	;;
+score-*)
+	tm_file="score/score.h glibc-stdint.h score/elf.h"
+	tm_p_file=score/score-protos.h
+	c_target_objs="${c_target_objs} score.o"
+	cxx_target_objs="${cxx_target_objs} score.o"
+	md_file=score/score.md
+	extra_modes=score/score-modes.def
+	out_file=score/score.cc
+	;;
 sh-*-elf* | sh[12346l]*-*-elf* | \
   sh-*-linux* | sh[2346lbe]*-*-linux* | \
   sh-*-netbsdelf* | shl*-*-netbsdelf*)
