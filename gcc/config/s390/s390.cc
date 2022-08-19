@@ -7196,40 +7196,40 @@ void s390_expand_atomic(machine_mode mode, enum rtx_code code,
   /* Patch new with val at correct position.  */
   switch (code)
   {
-  case PLUS:
-  case MINUS:
-    val = expand_simple_binop(SImode, code, new_rtx, orig,
-                              NULL_RTX, 1, OPTAB_DIRECT);
-    val = expand_simple_binop(SImode, AND, val, ac.modemask,
-                              NULL_RTX, 1, OPTAB_DIRECT);
-    /* FALLTHRU */
-  case SET:
-    if (ac.aligned && MEM_P(val))
-      store_bit_field(new_rtx, GET_MODE_BITSIZE(mode), 0,
-                      0, 0, SImode, val, false);
-    else
-    {
-      new_rtx = expand_simple_binop(SImode, AND, new_rtx, ac.modemaski,
-                                    NULL_RTX, 1, OPTAB_DIRECT);
-      new_rtx = expand_simple_binop(SImode, IOR, new_rtx, val,
-                                    NULL_RTX, 1, OPTAB_DIRECT);
+    case PLUS:
+    case MINUS:
+      val = expand_simple_binop (SImode, code, new_rtx, orig,
+				 NULL_RTX, 1, OPTAB_DIRECT);
+      val = expand_simple_binop (SImode, AND, val, ac.modemask,
+				 NULL_RTX, 1, OPTAB_DIRECT);
+      /* FALLTHRU */
+    case SET:
+      if (ac.aligned && MEM_P (val))
+	store_bit_field (new_rtx, GET_MODE_BITSIZE (mode), 0,
+			 0, 0, SImode, val, false, false);
+      else
+	{
+	  new_rtx = expand_simple_binop (SImode, AND, new_rtx, ac.modemaski,
+				     NULL_RTX, 1, OPTAB_DIRECT);
+	  new_rtx = expand_simple_binop (SImode, IOR, new_rtx, val,
+				     NULL_RTX, 1, OPTAB_DIRECT);
+	}
+      break;
+    case AND:
+    case IOR:
+    case XOR:
+      new_rtx = expand_simple_binop (SImode, code, new_rtx, val,
+				 NULL_RTX, 1, OPTAB_DIRECT);
+      break;
+    case MULT: /* NAND */
+      new_rtx = expand_simple_binop (SImode, AND, new_rtx, val,
+				 NULL_RTX, 1, OPTAB_DIRECT);
+      new_rtx = expand_simple_binop (SImode, XOR, new_rtx, ac.modemask,
+				 NULL_RTX, 1, OPTAB_DIRECT);
+      break;
+    default:
+      gcc_unreachable ();
     }
-    break;
-  case AND:
-  case IOR:
-  case XOR:
-    new_rtx = expand_simple_binop(SImode, code, new_rtx, val,
-                                  NULL_RTX, 1, OPTAB_DIRECT);
-    break;
-  case MULT: /* NAND */
-    new_rtx = expand_simple_binop(SImode, AND, new_rtx, val,
-                                  NULL_RTX, 1, OPTAB_DIRECT);
-    new_rtx = expand_simple_binop(SImode, XOR, new_rtx, ac.modemask,
-                                  NULL_RTX, 1, OPTAB_DIRECT);
-    break;
-  default:
-    gcc_unreachable();
-  }
 
   s390_emit_jump(csloop, s390_emit_compare_and_swap(NE, cmp,
                                                     ac.memsi, cmp, new_rtx,
