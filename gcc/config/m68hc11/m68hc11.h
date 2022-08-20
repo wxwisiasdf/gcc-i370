@@ -96,19 +96,6 @@ Note:
 #  define inhibit_libc
 #endif
 
-/* Forward type declaration for prototypes definitions.
-   rtx_ptr is equivalent to rtx. Can't use the same name.  */
-struct rtx_def;
-typedef struct rtx_def *rtx_ptr;
-
-union tree_node;
-typedef union tree_node *tree_ptr;
-
-/* We can't declare enum machine_mode forward nor include 'machmode.h' here.
-   Prototypes defined here will use an int instead. It's better than no
-   prototype at all.  */
-typedef int enum_machine_mode;
-
 /*****************************************************************************
 **
 ** Run-time Target Specification
@@ -774,11 +761,6 @@ typedef struct m68hc11_args
 #define PAD_VARARGS_DOWN \
   (m68hc11_function_arg_padding (TYPE_MODE (type), type) == downward)
 
-/* Initialize a variable CUM of type CUMULATIVE_ARGS for a call to a
-   function whose data type is FNTYPE. For a library call, FNTYPE is 0.  */
-#define INIT_CUMULATIVE_ARGS(CUM, FNTYPE, LIBNAME, INDIRECT, N_NAMED_ARGS) \
-    (m68hc11_init_cumulative_args (&CUM, FNTYPE, LIBNAME))
-
 /*
 #define EXTRA_CONSTRAINT(OP, C)                         \
 ((C) == 'U' ? m68hc11_small_indexed_indirect_p (OP, GET_MODE (OP)) \
@@ -1265,6 +1247,12 @@ do {                                                                    \
 /* For the support of memory banks we need addresses that indicate
    the page number.  */
 #define DWARF2_ADDR_SIZE 4
+
+#define INIT_CUMULATIVE_ARGS(CUM, FNTYPE, LIBNAME, INDIRECT, N_NAMED_ARGS) \
+  m68hc11_init_cumulative_args (&CUM, fntype, libname)
+
+#define INIT_CUMULATIVE_INCOMING_ARGS(CUM, FNTYPE, LIBNAME)		\
+  m68hc11_init_cumulative_args (&CUM, fntype, libname)
 
 /* SCz 2003-07-08: Don't use as dwarf2 .file/.loc directives because
    the linker is doing relaxation and it does not adjust the debug_line
