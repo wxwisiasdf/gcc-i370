@@ -3229,6 +3229,14 @@ score-*)
 	extra_modes=score/score-modes.def
 	out_file=score/score.cc
 	;;
+m68hc11-*)
+	tm_file="m68hc11/m68hc11.h glibc-stdint.h"
+	tm_p_file=m68hc11/m68hc11-protos.h
+	c_target_objs="${c_target_objs} m68hc11.o"
+	cxx_target_objs="${cxx_target_objs} m68hc11.o"
+	md_file=m68hc11/m68hc11.md
+	out_file=m68hc11/m68hc11.cc
+	;;
 sh-*-elf* | sh[12346l]*-*-elf* | \
   sh-*-linux* | sh[2346lbe]*-*-linux* | \
   sh-*-netbsdelf* | shl*-*-netbsdelf*)

@@ -5405,7 +5405,7 @@ esac
 case "$cpu_type" in
   aarch64 | alpha | arc | arm | avr | bfin | cris | csky | i386 | loongarch | m32c \
   | m68k | microblaze | mips | nds32 | nios2 | pa | riscv | rs6000 | score | sparc \
-  | visium | xstormy16 | xtensa)
+  | visium | xstormy16 | xtensa | m68hc11)
     insn="nop"
     ;;
   ia64 | s390)

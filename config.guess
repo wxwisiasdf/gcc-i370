@@ -212,7 +212,7 @@ case "$UNAME_MACHINE:$UNAME_SYSTEM:$UNAME_RELEASE:$UNAME_VERSION" in
 	    earm*)
 		os=netbsdelf
 		;;
-	    arm*|i386|m68k|ns32k|sh3*|sparc|vax)
+	    arm*|i386|m68k|ns32k|sh3*|sparc|vax|m68hc11)
 		set_cc_for_build
 		if echo __ELF__ | $CC_FOR_BUILD -E - 2>/dev/null \
 			| grep -q __ELF__

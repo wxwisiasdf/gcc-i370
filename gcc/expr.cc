@@ -4200,12 +4200,10 @@ compress_float_constant (rtx x, rtx y)
   machine_mode dstmode = GET_MODE (x);
   machine_mode orig_srcmode = GET_MODE (y);
   machine_mode srcmode;
-  const REAL_VALUE_TYPE *r;
   int oldcost, newcost;
   bool speed = optimize_insn_for_speed_p ();
 
-  r = CONST_DOUBLE_REAL_VALUE (y);
-
+  const REAL_VALUE_TYPE *r = CONST_DOUBLE_REAL_VALUE (y);
   if (targetm.legitimate_constant_p (dstmode, y))
     oldcost = set_src_cost (y, orig_srcmode, speed);
   else

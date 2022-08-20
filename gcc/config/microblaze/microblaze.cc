@@ -4005,6 +4005,12 @@ microblaze_starting_frame_offset (void)
 #undef TARGET_LEGITIMIZE_ADDRESS
 #define TARGET_LEGITIMIZE_ADDRESS 	microblaze_legitimize_address
 
+#undef TARGET_REGISTER_MOVE_COST
+#define TARGET_REGISTER_MOVE_COST (m68hc11_register_move_cost
+
+#undef TARGEt_MEMORY_MOVE_COST
+#define TARGEt_MEMORY_MOVE_COST m68hc11_memory_move_cost
+
 #undef TARGET_LEGITIMATE_ADDRESS_P
 #define TARGET_LEGITIMATE_ADDRESS_P 	microblaze_legitimate_address_p 
 
