@@ -1695,14 +1695,13 @@ expand_prologue (void)
 void
 expand_epilogue (void)
 {
-  int size;
-  register int regno;
+  int regno;
   int return_size;
   rtx scratch;
 
   gcc_assert (reload_completed == 1);
 
-  size = get_frame_size ();
+  int size = get_frame_size ();
 
   /* If we are returning a value in two registers, we have to preserve the
      X register and use the Y register to restore the stack and the saved
@@ -1737,9 +1736,7 @@ expand_epilogue (void)
     }
   else if ((!optimize_size && size > 8) || (optimize_size && size > 10))
     {
-      rtx insn;
-
-      insn = gen_rtx_PARALLEL
+      rtx insn = gen_rtx_PARALLEL
 	(VOIDmode,
 	 gen_rtvec (2,
 		    gen_rtx_SET (stack_pointer_rtx,
@@ -1751,9 +1748,7 @@ expand_epilogue (void)
     }
   else
     {
-      int i;
-
-      for (i = 2; i <= size; i += 2)
+      for (int i = 2; i <= size; i += 2)
 	emit_move_after_reload (scratch, stack_pop_word, scratch);
       if (size & 1)
 	emit_insn (gen_addhi3 (stack_pointer_rtx,
