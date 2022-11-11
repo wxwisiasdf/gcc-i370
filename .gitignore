@@ -69,3 +69,5 @@ stamp-*
 /mpc*
 /gmp*
 /isl*
+
+build-i370-mvs-elf-gcc/

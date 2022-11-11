@@ -1265,7 +1265,7 @@ extern struct i370_cc_flags cc_status;
 #define ASM_OUTPUT_LABELREF(FILE, NAME) i370_asm_label_ref
 
 #define ASM_GENERATE_INTERNAL_LABEL(LABEL, PREFIX, NUM) \
-  sprintf(LABEL, "*@@%s%d", PREFIX, NUM)
+  sprintf(LABEL, "*@@%s%i", PREFIX, (int)NUM)
 
 /* Generate internal label.  Since we can branch here from off page, we
    must reload the base register.  */
@@ -1319,9 +1319,11 @@ extern struct i370_cc_flags cc_status;
 
 /* This is how to output an element of a case-vector that is absolute.  */
 
-#define ASM_OUTPUT_ADDR_VEC_ELT(FILE, VALUE) \
-  mvs_case_code += 4;                        \
-  fprintf(FILE, "\tDC\tA(@@L%d)\n", VALUE)
+#define ASM_OUTPUT_ADDR_VEC_ELT(FILE, VALUE)  \
+  do {                                        \
+    mvs_case_code += 4;                       \
+    fprintf(FILE, "\tDC\tA(@@L%d)\n", VALUE); \
+  } while(0)
 
 /* This is how to output an element of a case-vector that is relative.  */
 
@@ -1335,18 +1337,22 @@ extern struct i370_cc_flags cc_status;
    value reg, and only if those are used.  Since profiling is not
    supported anyway, punt on this.  */
 
-#define ASM_OUTPUT_REG_PUSH(FILE, REGNO)            \
-  mvs_check_page(FILE, 8, 4);                       \
-  fprintf(FILE, "\tS\t13,=F'4'\n\tST\t%s,%d(13)\n", \
-          reg_names[REGNO], STACK_POINTER_OFFSET)
+#define ASM_OUTPUT_REG_PUSH(FILE, REGNO)              \
+  do {                                                \
+    mvs_check_page(FILE, 8, 4);                       \
+    fprintf(FILE, "\tS\t13,=F'4'\n\tST\t%s,%d(13)\n", \
+            reg_names[REGNO], STACK_POINTER_OFFSET);  \
+  } while(0)
 
 /* This is how to output an insn to pop a register from the stack.
    It need not be very fast code.  */
 
-#define ASM_OUTPUT_REG_POP(FILE, REGNO)             \
-  mvs_check_page(FILE, 8, 0);                       \
-  fprintf(FILE, "\tL\t%s,%d(13)\n\tLA\t13,4(13)\n", \
-          reg_names[REGNO], STACK_POINTER_OFFSET)
+#define ASM_OUTPUT_REG_POP(FILE, REGNO)               \
+  do {                                                \
+    mvs_check_page(FILE, 8, 0);                       \
+    fprintf(FILE, "\tL\t%s,%d(13)\n\tLA\t13,4(13)\n", \
+            reg_names[REGNO], STACK_POINTER_OFFSET);  \
+  } while(0)
 
 /* This outputs a text string.  The string are chopped up to fit into
    an 80 byte record.  Also, control and special characters, interpreted
@@ -1471,11 +1477,11 @@ extern struct i370_cc_flags cc_status;
    rounded up to whatever alignment the caller wants.  */
 
 #define ASM_OUTPUT_LOCAL(FILE, NAME, SIZE, ROUNDED) \
-  {                                                 \
+  do {                                              \
     fprintf(FILE, "\tDS\t0F\n");                    \
     ASM_OUTPUT_LABEL(FILE, NAME);                   \
     ASM_OUTPUT_SKIP(FILE, SIZE);                    \
-  }
+  } while(0)
 
 /* Store in OUTPUT a string (made with alloca) containing an
    assembler-name for a local static variable named NAME.
@@ -1483,16 +1489,16 @@ extern struct i370_cc_flags cc_status;
 
 #ifdef TARGET_PDPMAC
 #define ASM_FORMAT_PRIVATE_NAME(OUTPUT, NAME, LABELNO) \
-  {                                                    \
+  do {                                                 \
     (OUTPUT) = (char *)alloca(strlen((NAME)) + 10);    \
-    sprintf((OUTPUT), "__%d", (LABELNO));              \
-  }
+    sprintf((OUTPUT), "__%i", (int)(LABELNO));         \
+  } while(0)
 #else
 #define ASM_FORMAT_PRIVATE_NAME(OUTPUT, NAME, LABELNO) \
-  {                                                    \
+  do {                                                 \
     (OUTPUT) = (char *)alloca(strlen((NAME)) + 10);    \
-    sprintf((OUTPUT), "%s%d", (NAME), (LABELNO));      \
-  }
+    sprintf((OUTPUT), "%s%i", (NAME), (int)(LABELNO)); \
+  } while(0)
 #endif
 
 /* Print operand XV (an rtx) in assembler syntax to file FILE.
