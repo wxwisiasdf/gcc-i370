@@ -1318,7 +1318,8 @@ package body Sem_Ch3 is
 
       Check_Restriction (No_Access_Subprograms, T_Def);
 
-      Create_Extra_Formals (Desig_Type);
+      --  Addition of extra formals must be delayed till the freeze point so
+      --  that we know the convention.
    end Access_Subprogram_Declaration;
 
    ----------------------------
@@ -2668,7 +2669,7 @@ package body Sem_Ch3 is
                   --  Is_Conjunction_Of_Formal_Preelab_Init_Attributes goes to
                   --  Original_Node if needed, hence test for Standard_False.)
 
-                  if not Present (Expr)
+                  if No (Expr)
                     or else (Is_Entity_Name (Expr)
                               and then Entity (Expr) = Standard_True)
                     or else
@@ -3519,7 +3520,7 @@ package body Sem_Ch3 is
       --  Initialize the list of primitive operations to an empty list,
       --  to cover tagged types as well as untagged types. For untagged
       --  types this is used either to analyze the call as legal when
-      --  Extensions_Allowed is True, or to issue a better error message
+      --  Core_Extensions_Allowed is True, or to issue a better error message
       --  otherwise.
 
       Set_Direct_Primitive_Operations (T, New_Elmt_List);
@@ -4721,6 +4722,26 @@ package body Sem_Ch3 is
                   Expand_Sliding_Conversion (E, T);
                end if;
 
+               if In_Spec_Expression and then In_Declare_Expr > 0 then
+                  --  It is too early to be doing expansion-ish things,
+                  --  so exit early. But we have to set Ekind (Id) now so
+                  --  that subsequent uses of this entity are not rejected
+                  --  via the same mechanism that (correctly) rejects
+                  --  "X : Integer := X;".
+
+                  if Constant_Present (N) then
+                     Mutate_Ekind         (Id, E_Constant);
+                     Set_Is_True_Constant (Id);
+                  else
+                     Mutate_Ekind (Id, E_Variable);
+                     if Present (E) then
+                        Set_Has_Initial_Value (Id);
+                     end if;
+                  end if;
+
+                  goto Leave;
+               end if;
+
                Expand_Subtype_From_Expr
                  (N             => N,
                   Unc_Type      => T,
@@ -4770,20 +4791,13 @@ package body Sem_Ch3 is
          if not Is_Entity_Name (Object_Definition (N)) then
             Act_T := Etype (E);
             Check_Compile_Time_Size (Act_T);
-
-            if Aliased_Present (N) then
-               Set_Is_Constr_Subt_For_UN_Aliased (Act_T);
-            end if;
          end if;
 
          --  When the given object definition and the aggregate are specified
          --  independently, and their lengths might differ do a length check.
          --  This cannot happen if the aggregate is of the form (others =>...)
 
-         if not Is_Constrained (T) then
-            null;
-
-         elsif Nkind (E) = N_Raise_Constraint_Error then
+         if Nkind (E) = N_Raise_Constraint_Error then
 
             --  Aggregate is statically illegal. Place back in declaration
 
@@ -5737,7 +5751,7 @@ package body Sem_Ch3 is
                   --  operations to an empty list.
 
                   if Is_Tagged_Type (Id)
-                    or else Extensions_Allowed
+                    or else Core_Extensions_Allowed
                   then
                      Set_Direct_Primitive_Operations (Id, New_Elmt_List);
                   end if;
@@ -7419,12 +7433,13 @@ package body Sem_Ch3 is
             Analyze (High_Bound (Range_Expression (Constraint (Indic))));
          end if;
 
-         --  Introduce an implicit base type for the derived type even if there
+         --  Create an implicit base type for the derived type even if there
          --  is no constraint attached to it, since this seems closer to the
-         --  Ada semantics. Build a full type declaration tree for the derived
-         --  type using the implicit base type as the defining identifier. Then
-         --  build a subtype declaration tree which applies the constraint (if
-         --  any) have it replace the derived type declaration.
+         --  Ada semantics. Use an Itype like for the implicit base type of
+         --  other kinds of derived type, but build a full type declaration
+         --  for it so as to analyze the new literals properly. Then build a
+         --  subtype declaration tree which applies the constraint (if any)
+         --  and have it replace the derived type declaration.
 
          Literal := First_Literal (Parent_Type);
          Literals_List := New_List;
@@ -7457,8 +7472,7 @@ package body Sem_Ch3 is
          end loop;
 
          Implicit_Base :=
-           Make_Defining_Identifier (Sloc (Derived_Type),
-             Chars => New_External_Name (Chars (Derived_Type), 'B'));
+           Create_Itype (E_Enumeration_Type, N, Derived_Type, 'B');
 
          --  Indicate the proper nature of the derived type. This must be done
          --  before analysis of the literals, to recognize cases when a literal
@@ -7471,12 +7485,12 @@ package body Sem_Ch3 is
          Type_Decl :=
            Make_Full_Type_Declaration (Loc,
              Defining_Identifier => Implicit_Base,
-             Discriminant_Specifications => No_List,
              Type_Definition =>
                Make_Enumeration_Type_Definition (Loc, Literals_List));
 
-         Mark_Rewrite_Insertion (Type_Decl);
-         Insert_Before (N, Type_Decl);
+         --  Do not insert the declarationn, just analyze it in the context
+
+         Set_Parent (Type_Decl, Parent (N));
          Analyze (Type_Decl);
 
          --  The anonymous base now has a full declaration, but this base
@@ -7777,35 +7791,6 @@ package body Sem_Ch3 is
       --  must be converted to the derived type.
 
       Convert_Scalar_Bounds (N, Parent_Type, Derived_Type, Loc);
-
-      --  The implicit_base should be frozen when the derived type is frozen,
-      --  but note that it is used in the conversions of the bounds. For fixed
-      --  types we delay the determination of the bounds until the proper
-      --  freezing point. For other numeric types this is rejected by GCC, for
-      --  reasons that are currently unclear (???), so we choose to freeze the
-      --  implicit base now. In the case of integers and floating point types
-      --  this is harmless because subsequent representation clauses cannot
-      --  affect anything, but it is still baffling that we cannot use the
-      --  same mechanism for all derived numeric types.
-
-      --  There is a further complication: actually some representation
-      --  clauses can affect the implicit base type. For example, attribute
-      --  definition clauses for stream-oriented attributes need to set the
-      --  corresponding TSS entries on the base type, and this normally
-      --  cannot be done after the base type is frozen, so the circuitry in
-      --  Sem_Ch13.New_Stream_Subprogram must account for this possibility
-      --  and not use Set_TSS in this case.
-
-      --  There are also consequences for the case of delayed representation
-      --  aspects for some cases. For example, a Size aspect is delayed and
-      --  should not be evaluated to the freeze point. This early freezing
-      --  means that the size attribute evaluation happens too early???
-
-      if Is_Fixed_Point_Type (Parent_Type) then
-         Conditional_Delay (Implicit_Base, Parent_Type);
-      else
-         Freeze_Before (N, Implicit_Base);
-      end if;
    end Build_Derived_Numeric_Type;
 
    --------------------------------
@@ -11086,7 +11071,7 @@ package body Sem_Ch3 is
             --  with the aliased entity (otherwise we generate a duplicated
             --  error message).
 
-           and then not Present (Interface_Alias (Subp))
+           and then No (Interface_Alias (Subp))
          then
             if Present (Alias_Subp) then
 
@@ -11804,11 +11789,9 @@ package body Sem_Ch3 is
          Insert_Before (Typ_Decl, Decl);
          Analyze (Decl);
 
-         --  If an access to subprogram, create the extra formals
-
-         if Present (Acc_Def) then
-            Create_Extra_Formals (Designated_Type (Anon_Access));
-         end if;
+         --  At first sight we could add here the extra formals of an access to
+         --  subprogram; however, it must delayed till the freeze point so that
+         --  we know the convention.
 
          if Nkind (Comp_Def) = N_Component_Definition then
             Rewrite (Comp_Def,
@@ -14450,14 +14433,18 @@ package body Sem_Ch3 is
    begin
       Mutate_Ekind (Def_Id, E_Enumeration_Subtype);
 
-      Set_First_Literal     (Def_Id, First_Literal (Base_Type (T)));
-
-      Set_Etype             (Def_Id, Base_Type         (T));
-      Set_Size_Info         (Def_Id,                   (T));
-      Set_First_Rep_Item    (Def_Id, First_Rep_Item    (T));
-      Set_Is_Character_Type (Def_Id, Is_Character_Type (T));
-
+      Set_First_Literal            (Def_Id, First_Literal (Base_Type (T)));
+      Set_Etype                    (Def_Id, Base_Type         (T));
+      Set_Size_Info                (Def_Id,                   (T));
+      Set_Is_Character_Type        (Def_Id, Is_Character_Type (T));
       Set_Scalar_Range_For_Subtype (Def_Id, Range_Expression (C), T);
+
+      --  Inherit the chain of representation items instead of replacing it
+      --  because Build_Derived_Enumeration_Type rewrites the declaration of
+      --  the derived type as a subtype declaration and the former needs to
+      --  preserve existing representation items (see Build_Derived_Type).
+
+      Inherit_Rep_Item_Chain (Def_Id, T);
 
       Set_Discrete_RM_Size (Def_Id);
    end Constrain_Enumeration;
@@ -14573,7 +14560,7 @@ package body Sem_Ch3 is
          --  in various places for an Empty upper bound, and in any case it
          --  accurately characterizes the index's range of values.
 
-         if Nkind (S) = N_Range and then not Present (High_Bound (S)) then
+         if Nkind (S) = N_Range and then No (High_Bound (S)) then
             Is_FLB_Index := True;
             Set_High_Bound (S, Type_High_Bound (T));
          end if;
@@ -16065,12 +16052,12 @@ package body Sem_Ch3 is
          Next_Formal (Formal);
       end loop;
 
-      --  Extra formals are shared between the parent subprogram and the
-      --  derived subprogram (implicit in the above copy of formals), unless
-      --  the parent type is a limited interface type; hence we must inherit
-      --  also the reference to the first extra formal. When the parent type is
-      --  an interface the extra formals will be added when the subprogram is
-      --  frozen (see Freeze.Freeze_Subprogram).
+      --  Extra formals are shared between the parent subprogram and this
+      --  internal entity built by Derive_Subprogram (implicit in the above
+      --  copy of formals), unless the parent type is a limited interface type;
+      --  hence we must inherit also the reference to the first extra formal.
+      --  When the parent type is an interface, the extra formals will be added
+      --  when the tagged type is frozen (see Expand_Freeze_Record_Type).
 
       if not Is_Limited_Interface (Parent_Type) then
          Set_Extra_Formals (New_Subp, Extra_Formals (Parent_Subp));
@@ -16111,7 +16098,7 @@ package body Sem_Ch3 is
       Copy_Strub_Mode (New_Subp, Alias (New_Subp));
 
       --  Derived subprograms of a tagged type must inherit the convention
-      --  of the parent subprogram (a requirement of AI-117). Derived
+      --  of the parent subprogram (a requirement of AI95-117). Derived
       --  subprograms of untagged types simply get convention Ada by default.
 
       --  If the derived type is a tagged generic formal type with unknown
@@ -16529,15 +16516,15 @@ package body Sem_Ch3 is
 
       --  Local variables
 
-      Alias_Subp   : Entity_Id;
-      Act_List     : Elist_Id;
-      Act_Elmt     : Elmt_Id;
-      Act_Subp     : Entity_Id := Empty;
-      Elmt         : Elmt_Id;
-      Need_Search  : Boolean   := False;
-      New_Subp     : Entity_Id := Empty;
-      Parent_Base  : Entity_Id;
-      Subp         : Entity_Id;
+      Alias_Subp  : Entity_Id;
+      Act_List    : Elist_Id;
+      Act_Elmt    : Elmt_Id;
+      Act_Subp    : Entity_Id := Empty;
+      Elmt        : Elmt_Id;
+      Need_Search : Boolean   := False;
+      New_Subp    : Entity_Id;
+      Parent_Base : Entity_Id;
+      Subp        : Entity_Id;
 
    --  Start of processing for Derive_Subprograms
 
@@ -16752,9 +16739,9 @@ package body Sem_Ch3 is
                        (Is_Generic_Unit
                           (Scope (Find_Dispatching_Type (Alias_Subp)))
                          or else
-                           Instantiation_Depth
-                             (Sloc (Find_Dispatching_Type (Alias_Subp))) > 0);
-
+                           Instantiation_Location
+                             (Sloc (Find_Dispatching_Type (Alias_Subp)))
+                               /= No_Location);
                      declare
                         Iface_Prim_Loc : constant Source_Ptr :=
                                          Original_Location (Sloc (Alias_Subp));
@@ -16816,7 +16803,7 @@ package body Sem_Ch3 is
             --   have such primitives.
 
             if Present (Generic_Actual)
-              and then not Present (Act_Subp)
+              and then No (Act_Subp)
               and then Is_Limited_Interface (Parent_Base)
               and then Is_Predefined_Interface_Primitive (Subp)
             then
@@ -16999,11 +16986,9 @@ package body Sem_Ch3 is
           Low_Bound  => Lo,
           High_Bound => Hi));
 
-      Conditional_Delay (Derived_Type, Parent_Type);
-
-      Mutate_Ekind (Derived_Type, E_Enumeration_Subtype);
-      Set_Etype (Derived_Type, Implicit_Base);
-      Set_Size_Info         (Derived_Type, Parent_Type);
+      Mutate_Ekind  (Derived_Type, E_Enumeration_Subtype);
+      Set_Etype     (Derived_Type, Implicit_Base);
+      Set_Size_Info (Derived_Type, Parent_Type);
 
       if not Known_RM_Size (Derived_Type) then
          Set_RM_Size (Derived_Type, RM_Size (Parent_Type));
@@ -17022,16 +17007,6 @@ package body Sem_Ch3 is
       end if;
 
       Convert_Scalar_Bounds (N, Parent_Type, Derived_Type, Loc);
-
-      --  Because the implicit base is used in the conversion of the bounds, we
-      --  have to freeze it now. This is similar to what is done for numeric
-      --  types, and it equally suspicious, but otherwise a nonstatic bound
-      --  will have a reference to an unfrozen type, which is rejected by Gigi
-      --  (???). This requires specific care for definition of stream
-      --  attributes. For details, see comments at the end of
-      --  Build_Derived_Numeric_Type.
-
-      Freeze_Before (N, Implicit_Base);
    end Derived_Standard_Character;
 
    ------------------------------
@@ -20189,6 +20164,7 @@ package body Sem_Ch3 is
 
       case Nkind (Original_Node (Exp)) is
          when N_Aggregate
+            | N_Delta_Aggregate
             | N_Extension_Aggregate
             | N_Function_Call
             | N_Op

@@ -39,7 +39,7 @@ CXX_INSTALL_NAME := $(shell echo c++|sed '$(program_transform_name)')
 GXX_INSTALL_NAME := $(shell echo g++|sed '$(program_transform_name)')
 CXX_TARGET_INSTALL_NAME := $(target_noncanonical)-$(shell echo c++|sed '$(program_transform_name)')
 GXX_TARGET_INSTALL_NAME := $(target_noncanonical)-$(shell echo g++|sed '$(program_transform_name)')
-CP_PLUGIN_HEADERS := cp-tree.h cxx-pretty-print.h name-lookup.h type-utils.h operators.def
+CP_PLUGIN_HEADERS := cp-tree.h cxx-pretty-print.h name-lookup.h type-utils.h operators.def cp-trait.def
 
 #
 # Define the names for selecting c++ in LANGUAGES.
@@ -153,6 +153,30 @@ endif
 	gperf -o -C -E -k '1-6,$$' -j1 -D -N 'libc_name_p' -L C++ \
 		$(srcdir)/cp/cfns.gperf --output-file $(srcdir)/cp/cfns.h
 
+# We always need the dependency on the .gperf file because it itself is generated.
+ifeq ($(ENABLE_MAINTAINER_RULES), true)
+$(srcdir)/cp/std-name-hint.h: $(srcdir)/cp/std-name-hint.gperf
+else
+$(srcdir)/cp/std-name-hint.h: | $(srcdir)/cp/std-name-hint.gperf
+endif
+	gperf -o -C -E -k '1,2,7,11,$$' -D -N find -L C++ \
+		$(srcdir)/cp/std-name-hint.gperf --output-file $(srcdir)/cp/std-name-hint.h
+
+# The std-name-hint.gperf file itself is generated from a general
+# C++ API description.
+ifeq ($(ENABLE_MAINTAINER_RULES), true)
+$(srcdir)/cp/std-name-hint.gperf: $(srcdir)/cp/gen-cxxapi-file.py $(srcdir)/cp/cxxapi-data.csv
+else
+$(srcdir)/cp/std-name-hint.gperf:
+endif
+	python3 $(srcdir)/cp/gen-cxxapi-file.py hints $(srcdir)/cp/cxxapi-data.csv > $@
+ifneq ($(ENABLE_MAINTAINER_RULES), true)
+.SECONDARY: $(srcdir)/cp/std-name-hint.gperf
+endif
+
+# This is the file that depends on the generated header file.
+cp/name-lookup.o: $(srcdir)/cp/std-name-hint.h
+
 cc1plus.fda: ../stage1-gcc/cc1plus$(exeext) ../prev-gcc/$(PERF_DATA)
 	$(CREATE_GCOV) -binary ../stage1-gcc/cc1plus$(exeext) -gcov cc1plus.fda -profile ../prev-gcc/$(PERF_DATA) -gcov_version 1
 
@@ -261,15 +285,13 @@ c++.install-common: installdirs
 
 # We can't use links because not everyone supports them.  So just copy the
 # manpage.
-doc/g++.1: doc/gcc.1
-	cp $< doc/g++.1
+doc/g++.1:
+	if [ -f doc/gcc/man/man/gcc.1 ]; then cp doc/gcc/man/man/gcc.1 $@; fi
 
 c++.install-man: $(DESTDIR)$(man1dir)/$(GXX_INSTALL_NAME)$(man1ext)
 
-$(DESTDIR)$(man1dir)/$(GXX_INSTALL_NAME)$(man1ext): doc/g++.1 installdirs
-	-rm -f $@
-	-$(INSTALL_DATA) $< $@
-	-chmod a-x $@
+$(DESTDIR)$(man1dir)/$(GXX_INSTALL_NAME)$(man1ext): installdirs
+	-if [ -f doc/g++.1 ]; then rm -f $@; $(INSTALL_DATA) doc/g++.1 $@; chmod a-x $@; fi
 
 c++.install-plugin: installdirs
 # We keep the directory structure for files in config and .def files. All

@@ -34,7 +34,8 @@ enum memory_space
   MEMSPACE_GLOBALS,
   MEMSPACE_STACK,
   MEMSPACE_HEAP,
-  MEMSPACE_READONLY_DATA
+  MEMSPACE_READONLY_DATA,
+  MEMSPACE_THREAD_LOCAL
 };
 
 /* An enum for discriminating between the different concrete subclasses
@@ -49,6 +50,7 @@ enum region_kind
   RK_LABEL,
   RK_STACK,
   RK_HEAP,
+  RK_THREAD_LOCAL,
   RK_ROOT,
   RK_SYMBOLIC,
   RK_DECL,
@@ -62,6 +64,7 @@ enum region_kind
   RK_STRING,
   RK_BIT_RANGE,
   RK_VAR_ARG,
+  RK_ERRNO,
   RK_UNKNOWN,
 };
 
@@ -77,6 +80,8 @@ enum region_kind
        code_region (RK_CODE): represents the code segment, containing functions
        stack_region (RK_STACK): a stack, containing all stack frames
        heap_region (RK_HEAP): the heap, containing heap_allocated_regions
+       thread_local_region (RK_THREAD_LOCAL): thread-local data for the thread
+                                              being analyzed
      root_region (RK_ROOT): the top-level region
      function_region (RK_FUNCTION): the code for a particular function
      label_region (RK_LABEL): a particular label within a function
@@ -102,6 +107,7 @@ enum region_kind
 				      within another region
      var_arg_region (RK_VAR_ARG): a region for the N-th vararg within a
 				  frame_region for a variadic call
+     errno_region (RK_ERRNO): a region for holding "errno"
      unknown_region (RK_UNKNOWN): for handling unimplemented tree codes.  */
 
 /* Abstract base class for representing ways of accessing chunks of memory.
@@ -175,7 +181,7 @@ public:
 
   bool involves_p (const svalue *sval) const;
 
-  region_offset get_offset () const;
+  region_offset get_offset (region_model_manager *mgr) const;
 
   /* Attempt to get the size of this region as a concrete number of bytes.
      If successful, return true and write the size to *OUT.
@@ -195,6 +201,11 @@ public:
      If successful, return true and write to *OUT.
      Otherwise return false.  */
   virtual bool get_relative_concrete_offset (bit_offset_t *out) const;
+
+  /* Get the offset in bytes of this region relative to its parent as a svalue.
+     Might return an unknown_svalue.  */
+  virtual const svalue *
+  get_relative_symbolic_offset (region_model_manager *mgr) const;
 
   /* Attempt to get the position and size of this region expressed as a
      concrete range of bytes relative to its parent.
@@ -226,7 +237,7 @@ public:
   region (complexity c, unsigned id, const region *parent, tree type);
 
  private:
-  region_offset calc_offset () const;
+  region_offset calc_offset (region_model_manager *mgr) const;
 
   complexity m_complexity;
   unsigned m_id; // purely for deterministic sorting at this stage, for dumps
@@ -550,6 +561,32 @@ is_a_helper <const heap_region *>::test (const region *reg)
 
 namespace ana {
 
+/* Concrete space_region subclass: thread-local data for the thread
+   being analyzed.  */
+
+class thread_local_region : public space_region
+{
+public:
+  thread_local_region (unsigned id, region *parent)
+  : space_region (id, parent)
+  {}
+
+  enum region_kind get_kind () const final override { return RK_THREAD_LOCAL; }
+  void dump_to_pp (pretty_printer *pp, bool simple) const final override;
+};
+
+} // namespace ana
+
+template <>
+template <>
+inline bool
+is_a_helper <const thread_local_region *>::test (const region *reg)
+{
+  return reg->get_kind () == RK_THREAD_LOCAL;
+}
+
+namespace ana {
+
 /* Concrete region subclass.  The root region, containing all regions
    (either directly, or as descendents).
    Unique within a region_model_manager.  */
@@ -751,6 +788,8 @@ public:
   tree get_field () const { return m_field; }
 
   bool get_relative_concrete_offset (bit_offset_t *out) const final override;
+  const svalue *get_relative_symbolic_offset (region_model_manager *mgr)
+    const final override;
 
 private:
   tree m_field;
@@ -835,6 +874,8 @@ public:
 
   virtual bool
   get_relative_concrete_offset (bit_offset_t *out) const final override;
+  const svalue *get_relative_symbolic_offset (region_model_manager *mgr)
+    const final override;
 
 private:
   const svalue *m_index;
@@ -919,6 +960,8 @@ public:
   const svalue *get_byte_offset () const { return m_byte_offset; }
 
   bool get_relative_concrete_offset (bit_offset_t *out) const final override;
+  const svalue *get_relative_symbolic_offset (region_model_manager *mgr)
+    const final override;
   const svalue * get_byte_size_sval (region_model_manager *mgr)
     const final override;
 
@@ -1087,6 +1130,8 @@ public:
   void accept (visitor *v) const final override;
   void dump_to_pp (pretty_printer *pp, bool simple) const final override;
 
+  bool get_relative_concrete_offset (bit_offset_t *out) const final override;
+
   const region *get_original_region () const { return m_original_region; }
 
 private:
@@ -1243,6 +1288,8 @@ public:
   bool get_bit_size (bit_size_t *out) const final override;
   const svalue *get_byte_size_sval (region_model_manager *mgr) const final override;
   bool get_relative_concrete_offset (bit_offset_t *out) const final override;
+  const svalue *get_relative_symbolic_offset (region_model_manager *mgr)
+    const final override;
 
 private:
   bit_range m_bits;
@@ -1344,6 +1391,32 @@ template <> struct default_hash_traits<var_arg_region::key_t>
 {
   static const bool empty_zero_p = true;
 };
+
+namespace ana {
+
+/* A region for errno for the current thread.  */
+
+class errno_region : public region
+{
+public:
+  errno_region (unsigned id, const thread_local_region *parent)
+  : region (complexity (parent), id, parent, integer_type_node)
+  {}
+
+  enum region_kind get_kind () const final override { return RK_ERRNO; }
+
+  void dump_to_pp (pretty_printer *pp, bool simple) const final override;
+};
+
+} // namespace ana
+
+template <>
+template <>
+inline bool
+is_a_helper <const errno_region *>::test (const region *reg)
+{
+  return reg->get_kind () == RK_ERRNO;
+}
 
 namespace ana {
 

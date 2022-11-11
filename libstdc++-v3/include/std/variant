@@ -831,10 +831,13 @@ namespace __variant
 	: false_type
 	{ using element_type = _Tp; };
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wignored-qualifiers"
       template <typename... _Args>
 	struct __untag_result<const void(*)(_Args...)>
 	: false_type
 	{ using element_type = void(*)(_Args...); };
+#pragma GCC diagnostic pop
 
       template <typename... _Args>
 	struct __untag_result<__variant_cookie(*)(_Args...)>
@@ -1728,7 +1731,12 @@ namespace __variant
     {
       // Get the silly case of visiting no variants out of the way first.
       if constexpr (sizeof...(_Variants) == 0)
-	return std::forward<_Visitor>(__visitor)();
+	{
+	  if constexpr (is_void_v<_Result_type>)
+	    return (void) std::forward<_Visitor>(__visitor)();
+	  else
+	    return std::forward<_Visitor>(__visitor)();
+	}
       else
 	{
 	  constexpr size_t __max = 11; // "These go to eleven."

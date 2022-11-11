@@ -2314,7 +2314,7 @@ gfc_sym_type (gfc_symbol * sym, bool is_bind_c)
 	      && sym->ns->proc_name->attr.is_bind_c)
 	  || (sym->ts.deferred && (!sym->ts.u.cl
 				   || !sym->ts.u.cl->backend_decl))))
-    type = gfc_character1_type_node;
+    type = gfc_get_char_type (sym->ts.kind);
   else
     type = gfc_typenode_for_spec (&sym->ts, sym->attr.codimension);
 
@@ -3054,12 +3054,23 @@ create_fn_spec (gfc_symbol *sym, tree fntype)
   for (f = gfc_sym_get_dummy_args (sym); f; f = f->next)
     if (spec_len < sizeof (spec))
       {
-	if (!f->sym || f->sym->attr.pointer || f->sym->attr.target
+	bool is_class = false;
+	bool is_pointer = false;
+
+	if (f->sym)
+	  {
+	    is_class = f->sym->ts.type == BT_CLASS && CLASS_DATA (f->sym)
+	      && f->sym->attr.class_ok;
+	    is_pointer = is_class ? CLASS_DATA (f->sym)->attr.class_pointer
+				  : f->sym->attr.pointer;
+	  }
+
+	if (f->sym == NULL || is_pointer || f->sym->attr.target
 	    || f->sym->attr.external || f->sym->attr.cray_pointer
 	    || (f->sym->ts.type == BT_DERIVED
 		&& (f->sym->ts.u.derived->attr.proc_pointer_comp
 		    || f->sym->ts.u.derived->attr.pointer_comp))
-	    || (f->sym->ts.type == BT_CLASS
+	    || (is_class
 		&& (CLASS_DATA (f->sym)->ts.u.derived->attr.proc_pointer_comp
 		    || CLASS_DATA (f->sym)->ts.u.derived->attr.pointer_comp))
 	    || (f->sym->ts.type == BT_INTEGER && f->sym->ts.is_c_interop))
@@ -3094,6 +3105,7 @@ gfc_get_function_type (gfc_symbol * sym, gfc_actual_arglist *actual_args,
 {
   tree type;
   vec<tree, va_gc> *typelist = NULL;
+  vec<tree, va_gc> *hidden_typelist = NULL;
   gfc_formal_arglist *f;
   gfc_symbol *arg;
   int alternate_return = 0;
@@ -3211,7 +3223,7 @@ gfc_get_function_type (gfc_symbol * sym, gfc_actual_arglist *actual_args,
 	       so that the value can be returned.  */
 	    type = build_pointer_type (gfc_charlen_type_node);
 
-	  vec_safe_push (typelist, type);
+	  vec_safe_push (hidden_typelist, type);
 	}
       /* For noncharacter scalar intrinsic types, VALUE passes the value,
 	 hence, the optional status cannot be transferred via a NULL pointer.
@@ -3234,10 +3246,14 @@ gfc_get_function_type (gfc_symbol * sym, gfc_actual_arglist *actual_args,
 		  && CLASS_DATA (arg)->attr.codimension
 		  && !CLASS_DATA (arg)->attr.allocatable)))
 	{
-	  vec_safe_push (typelist, pvoid_type_node);  /* caf_token.  */
-	  vec_safe_push (typelist, gfc_array_index_type);  /* caf_offset.  */
+	  vec_safe_push (hidden_typelist, pvoid_type_node);  /* caf_token.  */
+	  vec_safe_push (hidden_typelist, gfc_array_index_type);  /* caf_offset.  */
 	}
     }
+
+  /* Put hidden character length, caf_token, caf_offset at the end.  */
+  vec_safe_reserve (typelist, vec_safe_length (hidden_typelist));
+  vec_safe_splice (typelist, hidden_typelist);
 
   if (!vec_safe_is_empty (typelist)
       || sym->attr.is_main_program
@@ -3286,7 +3302,9 @@ arg_type_list_done:
     type = gfc_sym_type (sym);
 
   if (is_varargs)
-    type = build_varargs_function_type_vec (type, typelist);
+    /* This should be represented as an unprototyped type, not a type
+       with (...) prototype.  */
+    type = build_function_type (type, NULL_TREE);
   else
     type = build_function_type_vec (type, typelist);
 

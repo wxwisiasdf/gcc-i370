@@ -1403,6 +1403,12 @@ handle_pragma_message (cpp_reader *)
 	    TREE_STRING_POINTER (message));
 }
 
+/* Ignore a no-op pragma that GCC recognizes, but which has no effect.  */
+static void
+handle_pragma_ignore (cpp_reader *)
+{
+}
+
 /* Mark whether the current location is valid for a STDC pragma.  */
 
 static bool valid_location_for_stdc_pragma;
@@ -1546,14 +1552,16 @@ static const struct omp_pragma_def oacc_pragmas[] = {
 };
 static const struct omp_pragma_def omp_pragmas[] = {
   { "allocate", PRAGMA_OMP_ALLOCATE },
+  { "assumes", PRAGMA_OMP_ASSUMES },
   { "atomic", PRAGMA_OMP_ATOMIC },
   { "barrier", PRAGMA_OMP_BARRIER },
+  { "begin", PRAGMA_OMP_BEGIN },
   { "cancel", PRAGMA_OMP_CANCEL },
   { "cancellation", PRAGMA_OMP_CANCELLATION_POINT },
   { "critical", PRAGMA_OMP_CRITICAL },
   { "depobj", PRAGMA_OMP_DEPOBJ },
   { "error", PRAGMA_OMP_ERROR },
-  { "end", PRAGMA_OMP_END_DECLARE_TARGET },
+  { "end", PRAGMA_OMP_END },
   { "flush", PRAGMA_OMP_FLUSH },
   { "nothing", PRAGMA_OMP_NOTHING },
   { "requires", PRAGMA_OMP_REQUIRES },
@@ -1568,6 +1576,7 @@ static const struct omp_pragma_def omp_pragmas[] = {
   { "threadprivate", PRAGMA_OMP_THREADPRIVATE }
 };
 static const struct omp_pragma_def omp_pragmas_simd[] = {
+  { "assume", PRAGMA_OMP_ASSUME },
   { "declare", PRAGMA_OMP_DECLARE },
   { "distribute", PRAGMA_OMP_DISTRIBUTE },
   { "for", PRAGMA_OMP_FOR },
@@ -1866,6 +1875,9 @@ init_pragma (void)
   c_register_pragma ("GCC", "push_options", handle_pragma_push_options);
   c_register_pragma ("GCC", "pop_options", handle_pragma_pop_options);
   c_register_pragma ("GCC", "reset_options", handle_pragma_reset_options);
+
+  c_register_pragma (0, "region", handle_pragma_ignore);
+  c_register_pragma (0, "endregion", handle_pragma_ignore);
 
   c_register_pragma ("STDC", "FLOAT_CONST_DECIMAL64",
 		     handle_pragma_float_const_decimal64);

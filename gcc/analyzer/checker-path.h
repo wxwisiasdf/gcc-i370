@@ -118,6 +118,7 @@ public:
   }
 
   void dump (pretty_printer *pp) const;
+  void debug () const;
 
   void set_location (location_t loc) { m_loc = loc; }
 
@@ -210,19 +211,43 @@ public:
   const program_state m_dst_state;
 };
 
+/* There are too many combinations to express region creation in one message,
+   so we emit multiple region_creation_event instances when each pertinent
+   region is created.
+
+   This enum distinguishes between the different messages.  */
+
+enum rce_kind
+{
+  /* Generate a message based on the memory space of the region
+     e.g. "region created on stack here".  */
+  RCE_MEM_SPACE,
+
+  /* Generate a message based on the capacity of the region
+     e.g. "capacity: 100 bytes".  */
+  RCE_CAPACITY,
+
+  /* Generate a debug message.  */
+  RCE_DEBUG
+};
+
 /* A concrete event subclass describing the creation of a region that
-   is significant for a diagnostic  e.g. "region created on stack here".  */
+   is significant for a diagnostic.  */
 
 class region_creation_event : public checker_event
 {
 public:
   region_creation_event (const region *reg,
+			 tree capacity,
+			 enum rce_kind kind,
 			 location_t loc, tree fndecl, int depth);
 
   label_text get_desc (bool can_colorize) const final override;
 
 private:
   const region *m_reg;
+  tree m_capacity;
+  enum rce_kind m_rce_kind;
 };
 
 /* An event subclass describing the entry to a function.  */
@@ -583,7 +608,7 @@ private:
 class checker_path : public diagnostic_path
 {
 public:
-  checker_path () : diagnostic_path () {}
+  checker_path (logger *logger) : diagnostic_path (), m_logger (logger) {}
 
   /* Implementation of diagnostic_path vfuncs.  */
 
@@ -607,10 +632,7 @@ public:
 
   void maybe_log (logger *logger, const char *desc) const;
 
-  void add_event (checker_event *event)
-  {
-    m_events.safe_push (event);
-  }
+  void add_event (std::unique_ptr<checker_event> event);
 
   void delete_event (int idx)
   {
@@ -632,9 +654,11 @@ public:
     m_events[idx] = new_event;
   }
 
-  void add_region_creation_event (const region *reg,
-				  location_t loc,
-				  tree fndecl, int depth);
+  void add_region_creation_events (const region *reg,
+				   const region_model *model,
+				   location_t loc,
+				   tree fndecl, int depth,
+				   bool debug);
 
   void add_final_event (const state_machine *sm,
 			const exploded_node *enode, const gimple *stmt,
@@ -685,6 +709,8 @@ private:
      exploded_node *, so that rewind events can refer to them in their
      descriptions.  */
   hash_map <const exploded_node *, diagnostic_event_id_t> m_setjmp_event_ids;
+
+  logger *m_logger;
 };
 
 } // namespace ana

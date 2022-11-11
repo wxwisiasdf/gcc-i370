@@ -35,6 +35,9 @@
   ;; Floating point unspecs.
   UNSPEC_FRINT
   UNSPEC_FCLASS
+  UNSPEC_FMAX
+  UNSPEC_FMIN
+  UNSPEC_FCOPYSIGN
 
   ;; Override return address for exception handling.
   UNSPEC_EH_RETURN
@@ -59,8 +62,15 @@
   UNSPEC_CRCC
 
   UNSPEC_LOAD_FROM_GOT
+  UNSPEC_PCALAU12I
   UNSPEC_ORI_L_LO12
+  UNSPEC_LUI_L_HI20
+  UNSPEC_LUI_H_LO20
+  UNSPEC_LUI_H_HI12
   UNSPEC_TLS_LOW
+
+  UNSPEC_SIBCALL_VALUE_MULTIPLE_INTERNAL_1
+  UNSPEC_CALL_VALUE_MULTIPLE_INTERNAL_1
 ])
 
 (define_c_enum "unspecv" [
@@ -205,6 +215,7 @@
 ;; fabs		floating point absolute value
 ;; fneg		floating point negation
 ;; fcmp		floating point compare
+;; fcopysign	floating point copysign
 ;; fcvt		floating point convert
 ;; fsqrt	floating point square root
 ;; frsqrt       floating point reciprocal square root
@@ -217,7 +228,7 @@
   "unknown,branch,jump,call,load,fpload,fpidxload,store,fpstore,fpidxstore,
    prefetch,prefetchx,condmove,mgtf,mftg,const,arith,logical,
    shift,slt,signext,clz,trap,imul,idiv,move,
-   fmove,fadd,fmul,fmadd,fdiv,frdiv,fabs,fneg,fcmp,fcvt,fsqrt,
+   fmove,fadd,fmul,fmadd,fdiv,frdiv,fabs,fneg,fcmp,fcopysign,fcvt,fsqrt,
    frsqrt,accext,accmod,multi,atomic,syncloop,nop,ghost"
   (cond [(eq_attr "jirl" "!unset") (const_string "call")
 	 (eq_attr "got" "load") (const_string "load")
@@ -967,6 +978,24 @@
    (set_attr "mode" "<UNITMODE>")])
 
 ;;
+;;  ....................
+;;
+;;	FLOATING POINT COPYSIGN
+;;
+;;  ....................
+
+(define_insn "copysign<mode>3"
+  [(set (match_operand:ANYF 0 "register_operand" "=f")
+	(unspec:ANYF [(match_operand:ANYF 1 "register_operand" "f")
+		      (match_operand:ANYF 2 "register_operand" "f")]
+		     UNSPEC_FCOPYSIGN))]
+  "TARGET_HARD_FLOAT"
+  "fcopysign.<fmt>\t%0,%1,%2"
+  [(set_attr "type" "fcopysign")
+   (set_attr "mode" "<UNITMODE>")])
+
+
+;;
 ;;  ...................
 ;;
 ;;  Count leading zeroes.
@@ -1025,8 +1054,9 @@
 
 (define_insn "fmax<mode>3"
   [(set (match_operand:ANYF 0 "register_operand" "=f")
-	(smax:ANYF (match_operand:ANYF 1 "register_operand" "f")
-		   (match_operand:ANYF 2 "register_operand" "f")))]
+	(unspec:ANYF [(use (match_operand:ANYF 1 "register_operand" "f"))
+		      (use (match_operand:ANYF 2 "register_operand" "f"))]
+		     UNSPEC_FMAX))]
   ""
   "fmax.<fmt>\t%0,%1,%2"
   [(set_attr "type" "fmove")
@@ -1034,8 +1064,9 @@
 
 (define_insn "fmin<mode>3"
   [(set (match_operand:ANYF 0 "register_operand" "=f")
-	(smin:ANYF (match_operand:ANYF 1 "register_operand" "f")
-		   (match_operand:ANYF 2 "register_operand" "f")))]
+	(unspec:ANYF [(use (match_operand:ANYF 1 "register_operand" "f"))
+		      (use (match_operand:ANYF 2 "register_operand" "f"))]
+		     UNSPEC_FMIN))]
   ""
   "fmin.<fmt>\t%0,%1,%2"
   [(set_attr "type" "fmove")
@@ -1934,13 +1965,50 @@
   [(set_attr "type" "move")]
 )
 
+(define_insn "@lui_l_hi20<mode>"
+  [(set (match_operand:P 0 "register_operand" "=r")
+	(unspec:P [(match_operand:P 1 "symbolic_operand")]
+	UNSPEC_LUI_L_HI20))]
+  ""
+  "lu12i.w\t%0,%r1"
+  [(set_attr "type" "move")]
+)
+
+(define_insn "@pcalau12i<mode>"
+  [(set (match_operand:P 0 "register_operand" "=j")
+	(unspec:P [(match_operand:P 1 "symbolic_operand" "")]
+	UNSPEC_PCALAU12I))]
+  ""
+  "pcalau12i\t%0,%%pc_hi20(%1)"
+  [(set_attr "type" "move")])
+
 (define_insn "@ori_l_lo12<mode>"
   [(set (match_operand:P 0 "register_operand" "=r")
 	(unspec:P [(match_operand:P 1 "register_operand" "r")
-		    (match_operand:P 2 "symbolic_operand")]
+		   (match_operand:P 2 "symbolic_operand")]
 	UNSPEC_ORI_L_LO12))]
   ""
   "ori\t%0,%1,%L2"
+  [(set_attr "type" "move")]
+)
+
+(define_insn "lui_h_lo20"
+  [(set (match_operand:DI 0 "register_operand" "=r")
+	(unspec:DI [(match_operand:DI 1 "register_operand" "0")
+		    (match_operand:DI 2 "symbolic_operand")]
+	UNSPEC_LUI_H_LO20))]
+  "TARGET_64BIT"
+  "lu32i.d\t%0,%R2"
+  [(set_attr "type" "move")]
+)
+
+(define_insn "lui_h_hi12"
+  [(set (match_operand:DI 0 "register_operand" "=r")
+	(unspec:DI [(match_operand:DI 1 "register_operand" "r")
+		    (match_operand:DI 2 "symbolic_operand")]
+	UNSPEC_LUI_H_HI12))]
+  "TARGET_64BIT"
+  "lu52i.d\t%0,%1,%H2"
   [(set_attr "type" "move")]
 )
 
@@ -2845,7 +2913,12 @@
 {
   rtx target = loongarch_legitimize_call_address (XEXP (operands[0], 0));
 
-  emit_call_insn (gen_sibcall_internal (target, operands[1]));
+  if (GET_CODE (target) == LO_SUM)
+    emit_call_insn (gen_sibcall_internal_1 (Pmode, XEXP (target, 0),
+					    XEXP (target, 1),
+					    operands[1]));
+  else
+    emit_call_insn (gen_sibcall_internal (target, operands[1]));
   DONE;
 })
 
@@ -2858,6 +2931,14 @@
    b\t%0
    b\t%%plt(%0)"
   [(set_attr "jirl" "indirect,direct,direct")])
+
+(define_insn "@sibcall_internal_1<mode>"
+  [(call (mem:P (lo_sum:P (match_operand:P 0 "register_operand" "j")
+			  (match_operand:P 1 "symbolic_operand" "")))
+	 (match_operand 2 "" ""))]
+  "SIBLING_CALL_P (insn) && TARGET_CMODEL_MEDIUM"
+  "jirl\t$r0,%0,%%pc_lo12(%1)"
+  [(set_attr "jirl" "indirect")])
 
 (define_expand "sibcall_value"
   [(parallel [(set (match_operand 0 "")
@@ -2874,7 +2955,14 @@
       rtx arg1 = XEXP (XVECEXP (operands[0],0, 0), 0);
       rtx arg2 = XEXP (XVECEXP (operands[0],0, 1), 0);
 
-      emit_call_insn (gen_sibcall_value_multiple_internal (arg1, target,
+      if (GET_CODE (target) == LO_SUM)
+	emit_call_insn (gen_sibcall_value_multiple_internal_1 (Pmode, arg1,
+							   XEXP (target, 0),
+							   XEXP (target, 1),
+							   operands[2],
+							   arg2));
+      else
+	emit_call_insn (gen_sibcall_value_multiple_internal (arg1, target,
 							   operands[2],
 							   arg2));
     }
@@ -2884,7 +2972,13 @@
       if (GET_CODE (operands[0]) == PARALLEL && XVECLEN (operands[0], 0) == 1)
 	operands[0] = XEXP (XVECEXP (operands[0], 0, 0), 0);
 
-      emit_call_insn (gen_sibcall_value_internal (operands[0], target,
+      if (GET_CODE (target) == LO_SUM)
+	emit_call_insn (gen_sibcall_value_internal_1 (Pmode, operands[0],
+						  XEXP (target, 0),
+						  XEXP (target, 1),
+						  operands[2]));
+      else
+	emit_call_insn (gen_sibcall_value_internal (operands[0], target,
 						  operands[2]));
     }
   DONE;
@@ -2901,6 +2995,15 @@
    b\t%%plt(%1)"
   [(set_attr "jirl" "indirect,direct,direct")])
 
+(define_insn "@sibcall_value_internal_1<mode>"
+  [(set (match_operand 0 "register_operand" "")
+	(call (mem:P (lo_sum:P (match_operand:P 1 "register_operand" "j")
+			       (match_operand:P 2 "symbolic_operand" "")))
+	      (match_operand 3 "" "")))]
+  "SIBLING_CALL_P (insn) && TARGET_CMODEL_MEDIUM"
+  "jirl\t$r0,%1,%%pc_lo12(%2)"
+  [(set_attr "jirl" "indirect")])
+
 (define_insn "sibcall_value_multiple_internal"
   [(set (match_operand 0 "register_operand" "")
 	(call (mem:SI (match_operand 1 "call_insn_operand" "j,c,b"))
@@ -2915,6 +3018,21 @@
    b\t%%plt(%1)"
   [(set_attr "jirl" "indirect,direct,direct")])
 
+(define_insn "@sibcall_value_multiple_internal_1<mode>"
+  [(set (match_operand 0 "register_operand" "")
+	(call (mem:P (unspec:P [(match_operand:P 1 "register_operand" "j")
+			        (match_operand:P 2 "symbolic_operand" "")]
+		      UNSPEC_SIBCALL_VALUE_MULTIPLE_INTERNAL_1))
+	      (match_operand 3 "" "")))
+   (set (match_operand 4 "register_operand" "")
+	(call (mem:P (unspec:P [(match_dup 1)
+			        (match_dup 2)]
+		      UNSPEC_SIBCALL_VALUE_MULTIPLE_INTERNAL_1))
+	      (match_dup 3)))]
+  "SIBLING_CALL_P (insn) && TARGET_CMODEL_MEDIUM"
+  "jirl\t$r0,%1,%%pc_lo12(%2)"
+  [(set_attr "jirl" "indirect")])
+
 (define_expand "call"
   [(parallel [(call (match_operand 0 "")
 		    (match_operand 1 ""))
@@ -2924,7 +3042,11 @@
 {
   rtx target = loongarch_legitimize_call_address (XEXP (operands[0], 0));
 
-  emit_call_insn (gen_call_internal (target, operands[1]));
+  if (GET_CODE (target) == LO_SUM)
+    emit_call_insn (gen_call_internal_1 (Pmode, XEXP (target, 0),
+					 XEXP (target, 1), operands[1]));
+  else
+    emit_call_insn (gen_call_internal (target, operands[1]));
   DONE;
 })
 
@@ -2938,6 +3060,15 @@
    bl\t%0
    bl\t%%plt(%0)"
   [(set_attr "jirl" "indirect,direct,direct")])
+
+(define_insn "@call_internal_1<mode>"
+  [(call (mem:P (lo_sum:P (match_operand:P 0 "register_operand" "j")
+			  (match_operand:P 1 "symbolic_operand" "")))
+	 (match_operand 2 "" ""))
+   (clobber (reg:SI RETURN_ADDR_REGNUM))]
+  "TARGET_CMODEL_MEDIUM"
+  "jirl\t$r1,%0,%%pc_lo12(%1)"
+  [(set_attr "jirl" "indirect")])
 
 (define_expand "call_value"
   [(parallel [(set (match_operand 0 "")
@@ -2953,7 +3084,13 @@
       rtx arg1 = XEXP (XVECEXP (operands[0], 0, 0), 0);
       rtx arg2 = XEXP (XVECEXP (operands[0], 0, 1), 0);
 
-      emit_call_insn (gen_call_value_multiple_internal (arg1, target,
+      if (GET_CODE (target) == LO_SUM)
+	emit_call_insn (gen_call_value_multiple_internal_1 (Pmode, arg1,
+							    XEXP (target, 0),
+							    XEXP (target, 1),
+							    operands[2], arg2));
+      else
+	emit_call_insn (gen_call_value_multiple_internal (arg1, target,
 							operands[2], arg2));
     }
    else
@@ -2962,7 +3099,13 @@
       if (GET_CODE (operands[0]) == PARALLEL && XVECLEN (operands[0], 0) == 1)
 	    operands[0] = XEXP (XVECEXP (operands[0], 0, 0), 0);
 
-      emit_call_insn (gen_call_value_internal (operands[0], target,
+      if (GET_CODE (target) == LO_SUM)
+	emit_call_insn (gen_call_value_internal_1 (Pmode, operands[0],
+						   XEXP (target, 0),
+						   XEXP (target, 1),
+						   operands[2]));
+      else
+	emit_call_insn (gen_call_value_internal (operands[0], target,
 					       operands[2]));
     }
   DONE;
@@ -2980,6 +3123,16 @@
    bl\t%%plt(%1)"
   [(set_attr "jirl" "indirect,direct,direct")])
 
+(define_insn "@call_value_internal_1<mode>"
+  [(set (match_operand 0 "register_operand" "")
+	(call (mem:P (lo_sum:P (match_operand:P 1 "register_operand" "j")
+			       (match_operand:P 2 "symbolic_operand" "")))
+	      (match_operand 3 "" "")))
+   (clobber (reg:SI RETURN_ADDR_REGNUM))]
+  "TARGET_CMODEL_MEDIUM"
+  "jirl\t$r1,%1,%%pc_lo12(%2)"
+  [(set_attr "jirl" "indirect")])
+
 (define_insn "call_value_multiple_internal"
   [(set (match_operand 0 "register_operand" "")
 	(call (mem:SI (match_operand 1 "call_insn_operand" "e,c,b"))
@@ -2994,6 +3147,22 @@
    bl\t%1
    bl\t%%plt(%1)"
   [(set_attr "jirl" "indirect,direct,direct")])
+
+(define_insn "@call_value_multiple_internal_1<mode>"
+  [(set (match_operand 0 "register_operand" "")
+	(call (mem:P (unspec:P [(match_operand:P 1 "register_operand" "j")
+			        (match_operand:P 2 "symbolic_operand" "")]
+		      UNSPEC_CALL_VALUE_MULTIPLE_INTERNAL_1))
+	      (match_operand 3 "" "")))
+   (set (match_operand 4 "register_operand" "")
+	(call (mem:P (unspec:P [(match_dup 1)
+			        (match_dup 2)]
+		      UNSPEC_CALL_VALUE_MULTIPLE_INTERNAL_1))
+	      (match_dup 3)))
+   (clobber (reg:SI RETURN_ADDR_REGNUM))]
+  "TARGET_CMODEL_MEDIUM"
+  "jirl\t$r1,%1,%%pc_lo12(%2)"
+  [(set_attr "jirl" "indirect")])
 
 
 ;; Call subroutine returning any type.

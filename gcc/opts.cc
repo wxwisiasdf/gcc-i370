@@ -53,7 +53,7 @@ const char *const debug_type_names[] =
 
 static uint32_t debug_type_masks[] =
 {
-  NO_DEBUG, DBX_DEBUG, DWARF2_DEBUG, XCOFF_DEBUG, VMS_DEBUG,
+  NO_DEBUG, DWARF2_DEBUG, VMS_DEBUG,
   CTF_DEBUG, BTF_DEBUG
 };
 
@@ -1288,8 +1288,9 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
 	   "%<-fsanitize=kernel-address%>");
 
   /* Currently live patching is not support for LTO.  */
-  if (opts->x_flag_live_patching && opts->x_flag_lto)
-    sorry ("live patching is not supported with LTO");
+  if (opts->x_flag_live_patching == LIVE_PATCHING_INLINE_ONLY_STATIC && opts->x_flag_lto)
+    sorry ("live patching (with %qs) is not supported with LTO",
+	   "inline-only-static");
 
   /* Currently vtable verification is not supported for LTO */
   if (opts->x_flag_vtable_verify && opts->x_flag_lto)
@@ -1801,7 +1802,7 @@ print_filtered_help (unsigned int include_flags,
 	  help = new_help;
 	}
 
-      if (option->range_max != -1)
+      if (option->range_max != -1 && tab == NULL)
 	{
 	  char b[128];
 	  snprintf (b, sizeof (b), "<%d,%d>", option->range_min,
@@ -3145,20 +3146,8 @@ common_handle_option (struct gcc_options *opts,
       set_debug_level (NO_DEBUG, 2, arg, opts, opts_set, loc);
       break;
 
-    case OPT_gstabs:
-    case OPT_gstabs_:
-      set_debug_level (DBX_DEBUG, code == OPT_gstabs_, arg, opts, opts_set,
-		       loc);
-      break;
-
     case OPT_gvms:
       set_debug_level (VMS_DEBUG, false, arg, opts, opts_set, loc);
-      break;
-
-    case OPT_gxcoff:
-    case OPT_gxcoff_:
-      set_debug_level (XCOFF_DEBUG, code == OPT_gxcoff_, arg, opts, opts_set,
-		       loc);
       break;
 
     case OPT_gz:
@@ -3257,6 +3246,10 @@ common_handle_option (struct gcc_options *opts,
 
     case OPT_freport_bug:
       dc->report_bug = value;
+      break;
+
+    case OPT_fmultiflags:
+      gcc_checking_assert (lang_mask == CL_DRIVER);
       break;
 
     default:
@@ -3363,8 +3356,6 @@ set_debug_level (uint32_t dinfo, int extended, const char *arg,
 		 struct gcc_options *opts, struct gcc_options *opts_set,
 		 location_t loc)
 {
-  opts->x_use_gnu_debug_info_extensions = extended;
-
   if (dinfo == NO_DEBUG)
     {
       if (opts->x_write_symbols == NO_DEBUG)
@@ -3378,8 +3369,6 @@ set_debug_level (uint32_t dinfo, int extended, const char *arg,
 		opts->x_write_symbols |= DWARF2_DEBUG;
 	      else
 		opts->x_write_symbols = DWARF2_DEBUG;
-#elif defined DBX_DEBUGGING_INFO
-	      opts->x_write_symbols = DBX_DEBUG;
 #endif
 	    }
 
@@ -3619,11 +3608,11 @@ get_option_html_page (int option_index)
 
   /* Analyzer options are on their own page.  */
   if (strstr (cl_opt->opt_text, "analyzer-"))
-    return "gcc/Static-Analyzer-Options.html";
+    return "gcc/gcc-command-options/options-that-control-static-analysis.html";
 
   /* Handle -flto= option.  */
   if (strstr (cl_opt->opt_text, "flto"))
-    return "gcc/Optimize-Options.html";
+    return "gcc/gcc-command-options/options-that-control-optimization.html";
 
 #ifdef CL_Fortran
   if ((cl_opt->flags & CL_Fortran) != 0
@@ -3634,10 +3623,11 @@ get_option_html_page (int option_index)
       && (cl_opt->flags & CL_CXX) == 0
 #endif
      )
-    return "gfortran/Error-and-Warning-Options.html";
+    return ("gfortran/gnu-fortran-command-options/"
+	    "options-to-request-or-suppress-errors-and-warnings.html");
 #endif
 
-  return "gcc/Warning-Options.html";
+  return "gcc/gcc-command-options/options-to-request-or-suppress-warnings.html";
 }
 
 /* Return malloced memory for a URL describing the option OPTION_INDEX
@@ -3656,11 +3646,8 @@ get_option_url (diagnostic_context *, int option_index)
 		      "gcc/Warning-Options.html".  */
 		   get_option_html_page (option_index),
 
-		   /* Expect an anchor of the form "index-Wfoo" e.g.
-		      <a name="index-Wformat"></a>, and thus an id within
-		      the URL of "#index-Wformat".  */
-		   "#index", cl_options[option_index].opt_text,
-		   NULL);
+		   /* Expect an anchor of the form "cmdoption-Wfoo".  */
+		   "#cmdoption", cl_options[option_index].opt_text, NULL);
   else
     return NULL;
 }
@@ -3797,12 +3784,16 @@ namespace selftest {
 static void
 test_get_option_html_page ()
 {
-  ASSERT_STREQ (get_option_html_page (OPT_Wcpp), "gcc/Warning-Options.html");
+  ASSERT_STREQ (get_option_html_page (OPT_Wcpp),
+		"gcc/gcc-command-options/"
+		"options-to-request-or-suppress-warnings.html");
   ASSERT_STREQ (get_option_html_page (OPT_Wanalyzer_double_free),
-	     "gcc/Static-Analyzer-Options.html");
+		"gcc/gcc-command-options/"
+		"options-that-control-static-analysis.html");
 #ifdef CL_Fortran
   ASSERT_STREQ (get_option_html_page (OPT_Wline_truncation),
-		"gfortran/Error-and-Warning-Options.html");
+		"gfortran/gnu-fortran-command-options/"
+		"options-to-request-or-suppress-errors-and-warnings.html");
 #endif
 }
 

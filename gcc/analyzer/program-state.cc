@@ -19,19 +19,17 @@ along with GCC; see the file COPYING3.  If not see
 <http://www.gnu.org/licenses/>.  */
 
 #include "config.h"
+#define INCLUDE_MEMORY
 #include "system.h"
 #include "coretypes.h"
 #include "tree.h"
 #include "diagnostic-core.h"
 #include "diagnostic.h"
-#include "function.h"
-#include "json.h"
 #include "analyzer/analyzer.h"
 #include "analyzer/analyzer-logging.h"
 #include "analyzer/sm.h"
 #include "sbitmap.h"
 #include "bitmap.h"
-#include "tristate.h"
 #include "ordered-hash-map.h"
 #include "selftest.h"
 #include "analyzer/call-string.h"
@@ -40,9 +38,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "analyzer/region-model.h"
 #include "analyzer/program-state.h"
 #include "analyzer/constraint-manager.h"
-#include "alloc-pool.h"
-#include "fibonacci_heap.h"
-#include "shortest-paths.h"
 #include "diagnostic-event-id.h"
 #include "analyzer/pending-diagnostic.h"
 #include "analyzer/diagnostic-manager.h"
@@ -56,6 +51,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "analyzer/program-state.h"
 #include "analyzer/exploded-graph.h"
 #include "analyzer/state-purge.h"
+#include "analyzer/call-summary.h"
 #include "analyzer/analyzer-selftests.h"
 
 #if ENABLE_ANALYZER
@@ -522,6 +518,14 @@ sm_state_map::impl_set_state (const svalue *sval,
   return true;
 }
 
+/* Clear any state for SVAL from this state map.  */
+
+void
+sm_state_map::clear_any_state (const svalue *sval)
+{
+  m_map.remove (sval);
+}
+
 /* Set the "global" state within this state map to STATE.  */
 
 void
@@ -723,6 +727,67 @@ sm_state_map::canonicalize_svalue (const svalue *sval,
   return sval;
 }
 
+/* Attempt to merge this state map with OTHER, writing the result
+   into *OUT.
+   Return true if the merger was possible, false otherwise.
+
+   Normally, only identical state maps can be merged, so that
+   differences between state maps lead to different enodes
+
+   However some state machines may support merging states to
+   allow for discarding of less important states, and thus avoid
+   blow-up of the exploded graph.  */
+
+bool
+sm_state_map::can_merge_with_p (const sm_state_map &other,
+				const state_machine &sm,
+				const extrinsic_state &ext_state,
+				sm_state_map **out) const
+{
+  /* If identical, then they merge trivially, with a copy.  */
+  if (*this == other)
+    {
+      delete *out;
+      *out = clone ();
+      return true;
+    }
+
+  delete *out;
+  *out = new sm_state_map (sm);
+
+  /* Otherwise, attempt to merge element by element. */
+
+  /* Try to merge global state.  */
+  if (state_machine::state_t merged_global_state
+      = sm.maybe_get_merged_state (get_global_state (),
+				   other.get_global_state ()))
+    (*out)->set_global_state (merged_global_state);
+  else
+    return false;
+
+  /* Try to merge state each svalue's state (for the union
+     of svalues represented by each smap).
+     Ignore the origin information.  */
+  hash_set<const svalue *> svals;
+  for (auto kv : *this)
+    svals.add (kv.first);
+  for (auto kv : other)
+    svals.add (kv.first);
+  for (auto sval : svals)
+    {
+      state_machine::state_t this_state = get_state (sval, ext_state);
+      state_machine::state_t other_state = other.get_state (sval, ext_state);
+      if (state_machine::state_t merged_state
+	    = sm.maybe_get_merged_state (this_state, other_state))
+	(*out)->impl_set_state (sval, merged_state, NULL, ext_state);
+      else
+	return false;
+    }
+
+  /* Successfully merged all elements.  */
+  return true;
+}
+
 /* class program_state.  */
 
 /* program_state's ctor.  */
@@ -741,6 +806,31 @@ program_state::program_state (const extrinsic_state &ext_state)
       sm_state_map *sm = new sm_state_map (ext_state.get_sm (i));
       m_checker_states.quick_push (sm);
     }
+}
+
+/* Attempt to to use R to replay SUMMARY into this object.
+   Return true if it is possible.  */
+
+bool
+sm_state_map::replay_call_summary (call_summary_replay &r,
+				   const sm_state_map &summary)
+{
+  for (auto kv : summary.m_map)
+    {
+      const svalue *summary_sval = kv.first;
+      const svalue *caller_sval = r.convert_svalue_from_summary (summary_sval);
+      if (!caller_sval)
+	continue;
+      const svalue *summary_origin = kv.second.m_origin;
+      const svalue *caller_origin
+	= (summary_origin
+	   ? r.convert_svalue_from_summary (summary_origin)
+	   : NULL);
+      // caller_origin can be NULL.
+      m_map.put (caller_sval, entry_t (kv.second.m_state, caller_origin));
+    }
+  m_global_state = summary.m_global_state;
+  return true;
 }
 
 /* program_state's copy ctor.  */
@@ -1262,11 +1352,14 @@ program_state::can_merge_with_p (const program_state &other,
   gcc_assert (out);
   gcc_assert (m_region_model);
 
-  /* Early reject if there are sm-differences between the states.  */
+  /* Attempt to merge the sm-states.  */
   int i;
   sm_state_map *smap;
   FOR_EACH_VEC_ELT (out->m_checker_states, i, smap)
-    if (*m_checker_states[i] != *other.m_checker_states[i])
+    if (!m_checker_states[i]->can_merge_with_p (*other.m_checker_states[i],
+						ext_state.get_sm (i),
+						ext_state,
+						&out->m_checker_states[i]))
       return false;
 
   /* Attempt to merge the region_models.  */
@@ -1276,13 +1369,6 @@ program_state::can_merge_with_p (const program_state &other,
 					 &ext_state,
 					 this, &other))
     return false;
-
-  /* Copy m_checker_states to OUT.  */
-  FOR_EACH_VEC_ELT (out->m_checker_states, i, smap)
-    {
-      delete smap;
-      out->m_checker_states[i] = m_checker_states[i]->clone ();
-    }
 
   out->m_region_model->canonicalize ();
 
@@ -1435,6 +1521,28 @@ program_state::detect_leaks (const program_state &src_state,
     if (const region *reg = sval->maybe_get_region ())
       if (reg->get_kind () == RK_HEAP_ALLOCATED)
 	dest_state.m_region_model->unset_dynamic_extents (reg);
+}
+
+/* Attempt to to use R to replay SUMMARY into this object.
+   Return true if it is possible.  */
+
+bool
+program_state::replay_call_summary (call_summary_replay &r,
+				    const program_state &summary)
+{
+  if (!m_region_model->replay_call_summary (r, *summary.m_region_model))
+    return false;
+
+  for (unsigned sm_idx = 0; sm_idx < m_checker_states.length (); sm_idx++)
+    {
+      const sm_state_map *summary_sm_map = summary.m_checker_states[sm_idx];
+      m_checker_states[sm_idx]->replay_call_summary (r, *summary_sm_map);
+    }
+
+  if (!summary.m_valid)
+    m_valid = false;
+
+  return true;
 }
 
 /* Handle calls to "__analyzer_dump_state".  */

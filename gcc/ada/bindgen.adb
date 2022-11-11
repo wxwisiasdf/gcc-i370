@@ -114,6 +114,24 @@ package body Bindgen is
    --  For CodePeer, introduce a wrapper subprogram which calls the
    --  user-defined main subprogram.
 
+   --  Name for local C-String variable
+
+   Adainit_String_Obj_Name  : constant String := "Adainit_Name_C_String";
+
+   --  Name and link_name for CUDA device initialization procedure
+
+   Device_Ada_Init_Subp_Name : constant String := "Device_Initialization";
+   Device_Link_Name_Prefix : constant String := "__device_";
+
+   function Device_Link_Name (Suffix : String) return String is
+     (Device_Link_Name_Prefix &
+       (if CUDA_Device_Library_Name = null
+        then "ada" -- is this an error path?
+        else CUDA_Device_Library_Name.all) & Suffix);
+
+   function Device_Ada_Init_Link_Name return String
+     is (Device_Link_Name (Suffix => "init"));
+
    ----------------------------------
    -- Interface_State Pragma Table --
    ----------------------------------
@@ -512,7 +530,6 @@ package body Bindgen is
    procedure Gen_Adainit (Elab_Order : Unit_Id_Array) is
       Main_Priority : Int renames ALIs.Table (ALIs.First).Main_Priority;
       Main_CPU      : Int renames ALIs.Table (ALIs.First).Main_CPU;
-
    begin
       --  Declare the access-to-subprogram type used for initialization of
       --  of __gnat_finalize_library_objects. This is declared at library
@@ -1334,6 +1351,15 @@ package body Bindgen is
          end;
       end loop;
 
+      WBI ("   procedure " & Device_Ada_Init_Subp_Name & ";");
+      WBI ("   pragma Export (C, " & Device_Ada_Init_Subp_Name &
+             ", Link_Name => """ & Device_Ada_Init_Link_Name & """);");
+
+      --  C-string declaration for adainit
+      WBI ("   " & Adainit_String_Obj_Name
+            & " : Interfaces.C.Strings.Chars_Ptr;");
+      WBI ("");
+
       WBI ("");
    end Gen_CUDA_Defs;
 
@@ -1342,6 +1368,41 @@ package body Bindgen is
    -------------------
 
    procedure Gen_CUDA_Init is
+      --  Generate call to register one function
+      procedure Gen_CUDA_Register_Function_Call
+        (Kernel_Name   : String;
+         Kernel_String : String;
+         Kernel_Proc   : String);
+
+      -------------------------------------
+      -- Gen_CUDA_Register_Function_Call --
+      -------------------------------------
+
+      procedure Gen_CUDA_Register_Function_Call
+        (Kernel_Name   : String;
+         Kernel_String : String;
+         Kernel_Proc   : String) is
+      begin
+         WBI ("      " & Kernel_String & " :=");
+         WBI ("        Interfaces.C.Strings.New_Char_Array ("""
+               & Kernel_Name
+               & """);");
+
+         --  Generate call to CUDA runtime to register function.
+         WBI ("      CUDA_Register_Function (");
+         WBI ("        Fat_Binary_Handle, ");
+         WBI ("        " & Kernel_Proc & "'Address,");
+         WBI ("        " & Kernel_String & ",");
+         WBI ("        " & Kernel_String & ",");
+         WBI ("        -1,");
+         WBI ("        System.Null_Address,");
+         WBI ("        System.Null_Address,");
+         WBI ("        System.Null_Address,");
+         WBI ("        System.Null_Address,");
+         WBI ("        System.Null_Address);");
+         WBI ("");
+      end Gen_CUDA_Register_Function_Call;
+
    begin
       if not Enable_CUDA_Expansion then
          return;
@@ -1372,27 +1433,24 @@ package body Bindgen is
                Get_Name_String (CUDA_Kernels.Table (K).Kernel_Name);
             --  Kernel_Name is the name of the kernel, after package expansion.
          begin
-            WBI ("      " & Kernel_String & " :=");
-            WBI ("        Interfaces.C.Strings.New_Char_Array ("""
-                  & Kernel_Name
-                  & """);");
-            --  Generate call to CUDA runtime to register function.
-            WBI ("      CUDA_Register_Function (");
-            WBI ("        Fat_Binary_Handle, ");
-            WBI ("        " & Kernel_Proc & "'Address,");
-            WBI ("        " & Kernel_String & ",");
-            WBI ("        " & Kernel_String & ",");
-            WBI ("        -1,");
-            WBI ("        System.Null_Address,");
-            WBI ("        System.Null_Address,");
-            WBI ("        System.Null_Address,");
-            WBI ("        System.Null_Address,");
-            WBI ("        System.Null_Address);");
-            WBI ("");
+            Gen_CUDA_Register_Function_Call
+              (Kernel_Name   => Kernel_Name,
+               Kernel_String => Kernel_String,
+               Kernel_Proc   => Kernel_Proc);
          end;
       end loop;
 
+      --  Register device-side Adainit
+      Gen_CUDA_Register_Function_Call
+        (Kernel_Name   => Device_Ada_Init_Link_Name,
+         Kernel_String => Adainit_String_Obj_Name,
+         Kernel_Proc   => Device_Ada_Init_Subp_Name);
+
       WBI ("      CUDA_Register_Fat_Binary_End (Fat_Binary_Handle);");
+
+      --  perform device (as opposed to host) elaboration
+      WBI ("      pragma CUDA_Execute (" &
+             Device_Ada_Init_Subp_Name & ", 1, 1);");
    end Gen_CUDA_Init;
 
    --------------------------
@@ -1544,6 +1602,7 @@ package body Bindgen is
 
                Check_Elab_Flag :=
                  Units.Table (Unum_Spec).Set_Elab_Entity
+                   and then Check_Elaboration_Flags
                    and then not CodePeer_Mode
                    and then (Force_Checking_Of_Elaboration_Flags
                               or Interface_Library_Unit
@@ -2512,6 +2571,9 @@ package body Bindgen is
       if Enable_CUDA_Expansion then
          WBI ("with Interfaces.C;");
          WBI ("with Interfaces.C.Strings;");
+
+         --  with of CUDA.Internal needed for CUDA_Execute pragma expansion
+         WBI ("with CUDA.Internal;");
       end if;
 
       Resolve_Binder_Options (Elab_Order);
@@ -2602,8 +2664,15 @@ package body Bindgen is
 
       WBI ("");
       WBI ("   procedure " & Ada_Init_Name.all & ";");
-      WBI ("   pragma Export (C, " & Ada_Init_Name.all & ", """ &
-           Ada_Init_Name.all & """);");
+      if Enable_CUDA_Device_Expansion then
+         WBI ("   pragma Export (C, " & Ada_Init_Name.all &
+                ", Link_Name => """ & Device_Link_Name_Prefix
+                & Ada_Init_Name.all & """);");
+         WBI ("   pragma CUDA_Global (" & Ada_Init_Name.all & ");");
+      else
+         WBI ("   pragma Export (C, " & Ada_Init_Name.all & ", """ &
+              Ada_Init_Name.all & """);");
+      end if;
 
       --  If -a has been specified use pragma Linker_Constructor for the init
       --  procedure and pragma Linker_Destructor for the final procedure.
@@ -2615,8 +2684,15 @@ package body Bindgen is
       if not Cumulative_Restrictions.Set (No_Finalization) then
          WBI ("");
          WBI ("   procedure " & Ada_Final_Name.all & ";");
-         WBI ("   pragma Export (C, " & Ada_Final_Name.all & ", """ &
-              Ada_Final_Name.all & """);");
+         if Enable_CUDA_Device_Expansion then
+            WBI ("   pragma Export (C, " & Ada_Final_Name.all &
+                   ", Link_Name => """ & Device_Link_Name_Prefix &
+                   Ada_Final_Name.all & """);");
+            WBI ("   pragma CUDA_Global (" & Ada_Final_Name.all & ");");
+         else
+            WBI ("   pragma Export (C, " & Ada_Final_Name.all & ", """ &
+                 Ada_Final_Name.all & """);");
+         end if;
 
          if Use_Pragma_Linker_Constructor then
             WBI ("   pragma Linker_Destructor (" & Ada_Final_Name.all & ");");
@@ -2840,6 +2916,13 @@ package body Bindgen is
       end if;
 
       Gen_Adainit (Elab_Order);
+
+      if Enable_CUDA_Expansion then
+         WBI ("   procedure " & Device_Ada_Init_Subp_Name & " is");
+         WBI ("   begin");
+         WBI ("      raise Program_Error;");
+         WBI ("   end " & Device_Ada_Init_Subp_Name & ";");
+      end if;
 
       if Bind_Main_Program then
          Gen_Main;

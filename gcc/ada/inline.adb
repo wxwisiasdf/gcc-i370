@@ -3013,14 +3013,10 @@ package body Inline is
             Temp_Typ := Etype (A);
          end if;
 
-         --  If the actual is a simple name or a literal, no need to
-         --  create a temporary, object can be used directly.
-
-         --  If the actual is a literal and the formal has its address taken,
-         --  we cannot pass the literal itself as an argument, so its value
-         --  must be captured in a temporary. Skip this optimization in
-         --  GNATprove mode, to make sure any check on a type conversion
-         --  will be issued.
+         --  If the actual is a simple name or a literal, no need to create a
+         --  temporary, object can be used directly. Skip this optimization in
+         --  GNATprove mode, to make sure any check on a type conversion will
+         --  be issued.
 
          if (Is_Entity_Name (A)
               and then
@@ -3038,6 +3034,10 @@ package body Inline is
              (Nkind (A) = N_Identifier
                and then Formal_Is_Used_Once (F)
                and then not GNATprove_Mode)
+
+         --  If the actual is a literal and the formal has its address taken,
+         --  we cannot pass the literal itself as an argument, so its value
+         --  must be captured in a temporary.
 
            or else
              (Nkind (A) in
@@ -3257,7 +3257,7 @@ package body Inline is
          pragma Assert
            (Modify_Tree_For_C
              and then Is_Subprogram (Enclosing_Subp)
-             and then Present (Postconditions_Proc (Enclosing_Subp)));
+             and then Present (Wrapped_Statements (Enclosing_Subp)));
 
          if Ekind (Enclosing_Subp) = E_Function then
             if Nkind (First (Parameter_Associations (N))) in
@@ -3367,6 +3367,8 @@ package body Inline is
          E   : Entity_Id;
          Ret : Node_Id;
 
+         Had_Private_View : Boolean;
+
       begin
          if Is_Entity_Name (N) and then Present (Entity (N)) then
             E := Entity (N);
@@ -3380,13 +3382,21 @@ package body Inline is
                --  subtype is private at the call point but its full view is
                --  visible to the body, then the inlined tree here must be
                --  analyzed with the full view).
+               --
+               --  The Has_Private_View flag is cleared by rewriting, so it
+               --  must be explicitly saved and restored, just like when
+               --  instantiating the body to inline.
 
                if Is_Entity_Name (A) then
+                  Had_Private_View := Has_Private_View (N);
                   Rewrite (N, New_Occurrence_Of (Entity (A), Sloc (N)));
+                  Set_Has_Private_View (N, Had_Private_View);
                   Check_Private_View (N);
 
                elsif Nkind (A) = N_Defining_Identifier then
+                  Had_Private_View := Has_Private_View (N);
                   Rewrite (N, New_Occurrence_Of (A, Sloc (N)));
+                  Set_Has_Private_View (N, Had_Private_View);
                   Check_Private_View (N);
 
                --  Numeric literal
@@ -3841,7 +3851,7 @@ package body Inline is
 
             if Modify_Tree_For_C
               and then Nkind (N) = N_Procedure_Call_Statement
-              and then Chars (Name (N)) = Name_uPostconditions
+              and then Chars (Name (N)) = Name_uWrapped_Statements
             then
                Declare_Postconditions_Result;
             end if;
@@ -4536,13 +4546,14 @@ package body Inline is
       Decl   : Node_Id;
 
    begin
-      if No (E_Body) then        --  imported subprogram
+      if No (E_Body) then -- imported subprogram
          return False;
 
       else
          Decl := First (Declarations (E_Body));
          while Present (Decl) loop
             if Nkind (Decl) = N_Full_Type_Declaration
+              and then Comes_From_Source (Decl)
               and then Present (Init_Proc (Defining_Identifier (Decl)))
             then
                return True;
@@ -4698,8 +4709,9 @@ package body Inline is
    procedure Inline_Static_Function_Call (N : Node_Id; Subp : Entity_Id) is
 
       function Replace_Formal (N : Node_Id) return Traverse_Result;
-      --  Replace each occurrence of a formal with the corresponding actual,
-      --  using the mapping created by Establish_Mapping_For_Inlined_Call.
+      --  Replace each occurrence of a formal with the
+      --  corresponding actual, using the mapping created
+      --  by Establish_Actual_Mapping_For_Inlined_Call.
 
       function Reset_Sloc (Nod : Node_Id) return Traverse_Result;
       --  Reset the Sloc of a node to that of the call itself, so that errors
